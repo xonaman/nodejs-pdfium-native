@@ -51,6 +51,13 @@ export class PDFiumPage {
     return this.native.getObject(index);
   }
 
+  /** Iterates over all page objects (text spans, paths, images, etc.). */
+  *objects(): Generator<PageObject> {
+    for (let i = 0; i < this.objectCount; i++) {
+      yield this.getObject(i);
+    }
+  }
+
   /** Closes the page and frees resources. */
   close(): void {
     this.native.close();
