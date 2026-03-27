@@ -94,8 +94,7 @@ protected:
       std::filesystem::path outPath(outputPath_);
       auto parentDir = outPath.parent_path();
       if (!parentDir.empty() && !std::filesystem::is_directory(parentDir)) {
-        SetError("Parent directory does not exist: " +
-                 parentDir.string());
+        SetError("Parent directory does not exist: " + parentDir.string());
         return;
       }
 
