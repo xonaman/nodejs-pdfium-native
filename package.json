@@ -28,13 +28,23 @@
     "install": "node scripts/download-pdfium.mjs && node-gyp rebuild && node scripts/bundle-lib.mjs",
     "build": "node-gyp rebuild && node scripts/bundle-lib.mjs",
     "download": "node scripts/download-pdfium.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint": "eslint --fix .",
+    "lint:check": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "node-addon-api": "^8.0.0",
     "node-gyp": "^11.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.1.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "prettier": "^3.8.1",
+    "typescript-eslint": "^8.57.2",
     "vitest": "^4.1.2"
   }
 }

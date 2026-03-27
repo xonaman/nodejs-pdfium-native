@@ -26,7 +26,7 @@ if (process.platform === 'win32') {
 
 // macOS / Linux: copy shared library next to pdfium.node
 const libDir = join(root, 'deps', 'pdfium', 'lib');
-const libs = readdirSync(libDir).filter(f => f.endsWith('.dylib') || f.endsWith('.so'));
+const libs = readdirSync(libDir).filter((f) => f.endsWith('.dylib') || f.endsWith('.so'));
 if (libs.length === 0) {
   console.error('No shared library found in deps/pdfium/lib/');
   process.exit(1);
@@ -41,7 +41,7 @@ for (const lib of libs) {
 
 // on macOS, fix the install name so pdfium.node looks for the dylib next to itself
 if (process.platform === 'darwin') {
-  const dylib = libs.find(f => f.endsWith('.dylib'));
+  const dylib = libs.find((f) => f.endsWith('.dylib'));
   if (dylib) {
     // change the dylib's own install name
     execSync(`install_name_tool -id @loader_path/${dylib} "${join(outDir, dylib)}"`, {
