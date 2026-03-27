@@ -4,6 +4,19 @@
   "description": "Native Node.js bindings for PDFium",
   "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "pdf",
+    "pdfium",
+    "native",
+    "render",
+    "text-extraction",
+    "ocr",
+    "node-addon",
+    "napi"
+  ],
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -40,7 +53,7 @@
     "ppc64"
   ],
   "scripts": {
-    "install": "node scripts/download-pdfium.mjs && node-gyp rebuild && node scripts/bundle-lib.mjs",
+    "install": "node scripts/install.mjs",
     "build": "node-gyp rebuild && node scripts/bundle-lib.mjs",
     "build:ts": "tsc",
     "prepublishOnly": "tsc",

@@ -901,28 +901,35 @@ static Napi::FunctionReference g_docConstructor;
 
 static std::string GetPdfiumErrorMessage() {
   unsigned long err = FPDF_GetLastError();
+  const char *code;
   const char *msg;
   switch (err) {
   case FPDF_ERR_FILE:
+    code = "FILE";
     msg = "File not found or could not be opened";
     break;
   case FPDF_ERR_FORMAT:
+    code = "FORMAT";
     msg = "Not a valid PDF or corrupted";
     break;
   case FPDF_ERR_PASSWORD:
+    code = "PASSWORD";
     msg = "Password required or incorrect";
     break;
   case FPDF_ERR_SECURITY:
+    code = "SECURITY";
     msg = "Unsupported security scheme";
     break;
   case FPDF_ERR_PAGE:
+    code = "PAGE";
     msg = "Page error";
     break;
   default:
+    code = "UNKNOWN";
     msg = "Unknown error";
     break;
   }
-  return std::string(msg) + " (error code: " + std::to_string(err) + ")";
+  return std::string(code) + ":" + msg;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,14 @@
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { loadDocument, PDFiumDocument, PDFiumPage } from './index.js';
+import {
+  loadDocument,
+  PDFiumDocument,
+  PDFiumPage,
+  PDFiumError,
+  PDFiumFileError,
+  PDFiumFormatError,
+} from './index.js';
 
 // minimal valid PDF: single page (612x792 pts), no content
 const MINIMAL_PDF = `%PDF-1.0
@@ -68,12 +75,24 @@ describe('loadDocument', () => {
     doc.destroy();
   });
 
-  it('rejects with an error for invalid data', async () => {
-    await expect(loadDocument(Buffer.from('not a pdf'))).rejects.toThrow();
+  it('rejects with PDFiumFormatError for invalid data', async () => {
+    await expect(loadDocument(Buffer.from('not a pdf'))).rejects.toThrow(PDFiumFormatError);
+    try {
+      await loadDocument(Buffer.from('not a pdf'));
+    } catch (err) {
+      expect(err).toBeInstanceOf(PDFiumError);
+      expect((err as PDFiumError).code).toBe('FORMAT');
+    }
   });
 
-  it('rejects with an error for non-existent file', async () => {
-    await expect(loadDocument('/tmp/does-not-exist.pdf')).rejects.toThrow('File not found');
+  it('rejects with PDFiumFileError for non-existent file', async () => {
+    await expect(loadDocument('/tmp/does-not-exist.pdf')).rejects.toThrow(PDFiumFileError);
+    try {
+      await loadDocument('/tmp/does-not-exist.pdf');
+    } catch (err) {
+      expect(err).toBeInstanceOf(PDFiumError);
+      expect((err as PDFiumError).code).toBe('FILE');
+    }
   });
 
   it('rejects with an error for wrong password', async () => {
@@ -406,6 +425,19 @@ describe('PDFiumDocument.getMetadata', () => {
     expect(typeof meta.pdfVersion).toBe('number');
     doc.destroy();
   });
+
+  it('returns correct metadata values from a rich PDF', async () => {
+    const doc = await loadDocument(
+      resolve(import.meta.dirname!, '..', 'test', 'fixtures', 'metadata.pdf'),
+    );
+    const meta = doc.metadata;
+    expect(meta.title).toBe('Test Document Title');
+    expect(meta.author).toBe('Test Author');
+    expect(meta.subject).toBe('Test Subject');
+    expect(meta.creator).toBe('pdfium-native test');
+    expect(meta.producer).toContain('pdf-lib');
+    doc.destroy();
+  });
 });
 
 describe('PDFiumDocument.getBookmarks', () => {
@@ -414,6 +446,22 @@ describe('PDFiumDocument.getBookmarks', () => {
     const bookmarks = doc.getBookmarks();
     expect(Array.isArray(bookmarks)).toBe(true);
     expect(bookmarks.length).toBe(0);
+    doc.destroy();
+  });
+
+  it('returns bookmarks with titles and page indices', async () => {
+    const doc = await loadDocument(
+      resolve(import.meta.dirname!, '..', 'test', 'fixtures', 'bookmarks.pdf'),
+    );
+    expect(doc.pageCount).toBe(3);
+    const bookmarks = doc.getBookmarks();
+    expect(bookmarks.length).toBe(3);
+    expect(bookmarks[0]!.title).toBe('Chapter 1');
+    expect(bookmarks[0]!.pageIndex).toBe(0);
+    expect(bookmarks[1]!.title).toBe('Chapter 2');
+    expect(bookmarks[1]!.pageIndex).toBe(1);
+    expect(bookmarks[2]!.title).toBe('Chapter 3');
+    expect(bookmarks[2]!.pageIndex).toBe(2);
     doc.destroy();
   });
 });
@@ -425,6 +473,30 @@ describe('PDFiumPage.getLinks', () => {
     const links = page.getLinks();
     expect(Array.isArray(links)).toBe(true);
     expect(links.length).toBe(0);
+    page.close();
+    doc.destroy();
+  });
+
+  it('returns links with URLs and page indices', async () => {
+    const doc = await loadDocument(
+      resolve(import.meta.dirname!, '..', 'test', 'fixtures', 'links.pdf'),
+    );
+    const page = await doc.getPage(0);
+    const links = page.getLinks();
+    expect(links.length).toBe(2);
+
+    // internal link (to page 2)
+    const internalLink = links.find((l) => l.pageIndex !== undefined);
+    expect(internalLink).toBeDefined();
+    expect(internalLink!.pageIndex).toBe(1);
+    expect(internalLink!.bounds).toBeDefined();
+
+    // external link (URL)
+    const externalLink = links.find((l) => l.url !== undefined);
+    expect(externalLink).toBeDefined();
+    expect(externalLink!.url).toBe('https://example.com');
+    expect(externalLink!.bounds).toBeDefined();
+
     page.close();
     doc.destroy();
   });
@@ -478,6 +550,31 @@ describe('PDFiumPage.getAnnotations', () => {
     const annotations = page.getAnnotations();
     expect(Array.isArray(annotations)).toBe(true);
     expect(annotations.length).toBe(0);
+    page.close();
+    doc.destroy();
+  });
+
+  it('returns annotations with types, bounds, and contents', async () => {
+    const doc = await loadDocument(
+      resolve(import.meta.dirname!, '..', 'test', 'fixtures', 'annotations.pdf'),
+    );
+    const page = await doc.getPage(0);
+    const annotations = page.getAnnotations();
+    expect(annotations.length).toBe(2);
+
+    // text annotation (sticky note)
+    const textAnnot = annotations.find((a) => a.type === 'text');
+    expect(textAnnot).toBeDefined();
+    expect(textAnnot!.contents).toBe('This is a sticky note');
+    expect(textAnnot!.bounds).toBeDefined();
+    expect(textAnnot!.color).toBeDefined();
+
+    // highlight annotation
+    const highlightAnnot = annotations.find((a) => a.type === 'highlight');
+    expect(highlightAnnot).toBeDefined();
+    expect(highlightAnnot!.contents).toBe('Highlighted text');
+    expect(highlightAnnot!.bounds).toBeDefined();
+
     page.close();
     doc.destroy();
   });

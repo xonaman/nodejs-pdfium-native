@@ -5,6 +5,7 @@
     "moduleResolution": "bundler",
     "declaration": true,
     "declarationMap": true,
+    "sourceMap": true,
     "outDir": "dist",
     "rootDir": "lib",
     "strict": true,
