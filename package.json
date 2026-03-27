@@ -2,6 +2,7 @@
   "name": "pdfium-native",
   "version": "0.1.0",
   "description": "Native Node.js bindings for PDFium",
+  "license": "MIT",
   "type": "module",
   "main": "build/Release/pdfium.node",
   "os": [
