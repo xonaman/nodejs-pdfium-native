@@ -122,8 +122,6 @@ private:
   }
 };
 
-Napi::FunctionReference PDFiumDocument::pageConstructor;
-
 // ---------------------------------------------------------------------------
 // GetPageWorker — async page loading
 // ---------------------------------------------------------------------------

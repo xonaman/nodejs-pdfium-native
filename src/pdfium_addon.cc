@@ -1,5 +1,7 @@
 #include "document.h"
 
+Napi::FunctionReference PDFiumDocument::pageConstructor;
+
 // ---------------------------------------------------------------------------
 // Module-level: loadDocument (async)
 // ---------------------------------------------------------------------------
