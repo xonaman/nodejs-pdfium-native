@@ -237,6 +237,9 @@ PDFiumDocument::GetPageAsync(const Napi::CallbackInfo &info) {
   }
 
   int pageIndex = info[0].As<Napi::Number>().Int32Value();
+
+  // FPDF_GetPageCount is not thread-safe — acquire mutex
+  std::lock_guard<std::mutex> lock(g_pdfium_mutex);
   int numPages = FPDF_GetPageCount(doc_);
   if (pageIndex < 0 || pageIndex >= numPages) {
     Napi::RangeError::New(env, "Page index out of range")

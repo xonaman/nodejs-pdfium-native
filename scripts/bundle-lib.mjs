@@ -1,5 +1,5 @@
 import { cpSync, existsSync, readdirSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 
 const root = join(import.meta.dirname, '..');
@@ -44,15 +44,18 @@ if (process.platform === 'darwin') {
   const dylib = libs.find((f) => f.endsWith('.dylib'));
   if (dylib) {
     // change the dylib's own install name
-    execSync(`install_name_tool -id @loader_path/${dylib} "${join(outDir, dylib)}"`, {
+    execFileSync('install_name_tool', ['-id', `@loader_path/${dylib}`, join(outDir, dylib)], {
       stdio: 'inherit',
     });
     // change the reference inside pdfium.node
-    const oldName = execSync(`otool -L "${nodeFile}" | grep ${dylib} | awk '{print $1}'`)
+    const oldName = execFileSync('otool', ['-L', nodeFile])
       .toString()
-      .trim();
+      .split('\n')
+      .find((line) => line.includes(dylib))
+      ?.trim()
+      .split(' ')[0];
     if (oldName) {
-      execSync(`install_name_tool -change "${oldName}" @loader_path/${dylib} "${nodeFile}"`, {
+      execFileSync('install_name_tool', ['-change', oldName, `@loader_path/${dylib}`, nodeFile], {
         stdio: 'inherit',
       });
       console.log(`Fixed install name: ${oldName} → @loader_path/${dylib}`);

@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execSync, execFileSync } from 'node:child_process';
 import { createWriteStream, mkdirSync, existsSync, rmSync } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
@@ -11,20 +11,14 @@ const BASE_URL = 'https://github.com/bblanchon/pdfium-binaries/releases/download
 function isMusl() {
   if (process.platform !== 'linux') return false;
   try {
-    const ldd = execSync('ldd --version 2>&1', { encoding: 'utf8' });
+    const ldd = execSync('ldd --version 2>&1 || true', { encoding: 'utf8' });
     return ldd.toLowerCase().includes('musl');
   } catch {
-    // ldd --version exits non-zero on musl
-    try {
-      const stderr = execSync('ldd --version 2>&1 || true', { encoding: 'utf8' });
-      return stderr.toLowerCase().includes('musl');
-    } catch {
-      return (
-        existsSync('/lib/ld-musl-x86_64.so.1') ||
-        existsSync('/lib/ld-musl-aarch64.so.1') ||
-        existsSync('/lib/ld-musl-armhf.so.1')
-      );
-    }
+    return (
+      existsSync('/lib/ld-musl-x86_64.so.1') ||
+      existsSync('/lib/ld-musl-aarch64.so.1') ||
+      existsSync('/lib/ld-musl-armhf.so.1')
+    );
   }
 }
 
@@ -85,7 +79,7 @@ await pipeline(Readable.fromWeb(response.body), createWriteStream(tarball));
 
 console.log('Extracting...');
 mkdirSync(depsDir, { recursive: true });
-execSync(`tar -xzf "${tarball}" -C "${depsDir}"`, { stdio: 'inherit' });
+execFileSync('tar', ['-xzf', tarball, '-C', depsDir], { stdio: 'inherit' });
 
 // clean up tarball
 rmSync(tarball);

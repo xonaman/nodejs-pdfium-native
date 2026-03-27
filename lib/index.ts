@@ -10,7 +10,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 type PdfInput = Buffer | string;
 
-// ensure the dynamic linker can find libpdfium next to pdfium.node
+// ensure the dynamic linker can find libpdfium next to pdfium.node.
+// note: LD_LIBRARY_PATH is read at process startup, so this only helps
+// child processes or dlopen calls that haven't been resolved yet.
 const addonDir = resolve(__dirname, '..', 'build', 'Release');
 if (process.platform === 'win32') {
   process.env.PATH = `${addonDir};${process.env.PATH ?? ''}`;

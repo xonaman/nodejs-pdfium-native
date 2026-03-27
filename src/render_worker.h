@@ -4,13 +4,8 @@
 
 #include <atomic>
 #include <cstdio>
+#include <filesystem>
 #include <memory>
-#include <sys/stat.h>
-#include <sys/types.h>
-
-#ifdef _WIN32
-#define S_ISDIR(m) (((m) & _S_IFMT) == _S_IFDIR)
-#endif
 
 #include "stb_image_write.h"
 
@@ -96,20 +91,12 @@ protected:
     // write to file if output path was specified
     if (!outputPath_.empty()) {
       // verify parent directory exists
-      std::string parent = outputPath_;
-      auto sep = parent.find_last_of('/');
-#ifdef _WIN32
-      auto bsep = parent.find_last_of('\\');
-      if (bsep != std::string::npos && (sep == std::string::npos || bsep > sep))
-        sep = bsep;
-#endif
-      if (sep != std::string::npos) {
-        parent.resize(sep);
-        struct stat st;
-        if (stat(parent.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) {
-          SetError("Parent directory does not exist: " + parent);
-          return;
-        }
+      std::filesystem::path outPath(outputPath_);
+      auto parentDir = outPath.parent_path();
+      if (!parentDir.empty() && !std::filesystem::is_directory(parentDir)) {
+        SetError("Parent directory does not exist: " +
+                 parentDir.string());
+        return;
       }
 
       FILE *f = fopen(outputPath_.c_str(), "wb");

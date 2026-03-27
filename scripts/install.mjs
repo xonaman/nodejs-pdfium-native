@@ -7,7 +7,7 @@
  */
 import { existsSync, mkdirSync, createWriteStream, readFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
-import { execSync } from 'node:child_process';
+import { execSync, execFileSync } from 'node:child_process';
 import { pipeline } from 'node:stream/promises';
 
 const root = join(import.meta.dirname, '..');
@@ -43,7 +43,7 @@ async function tryDownload() {
     await pipeline(body, fileStream);
 
     // extract tar.gz into project root
-    execSync(`tar xzf "${tmpTar}" -C "${root}"`, { stdio: 'inherit' });
+    execFileSync('tar', ['xzf', tmpTar, '-C', root], { stdio: 'inherit' });
     unlinkSync(tmpTar);
 
     // verify the .node file exists
