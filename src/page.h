@@ -75,6 +75,9 @@ private:
     }
   }
 
+  /**
+   * Returns the 0-based page index.
+   */
   Napi::Value GetNumber(const Napi::CallbackInfo &info) {
     return Napi::Number::New(info.Env(), index_);
   }
@@ -169,9 +172,8 @@ private:
     }
     if (renderWidth > MAX_RENDER_DIMENSION ||
         renderHeight > MAX_RENDER_DIMENSION) {
-      Napi::RangeError::New(
-          env, "Render dimensions exceed maximum (" +
-                   std::to_string(MAX_RENDER_DIMENSION) + ")")
+      Napi::RangeError::New(env, "Render dimensions exceed maximum (" +
+                                     std::to_string(MAX_RENDER_DIMENSION) + ")")
           .ThrowAsJavaScriptException();
       return env.Null();
     }

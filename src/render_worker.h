@@ -6,11 +6,16 @@
 #include <cstdio>
 #include <memory>
 #include <sys/stat.h>
+#include <sys/types.h>
+
+#ifdef _WIN32
+#define S_ISDIR(m) (((m) & _S_IFMT) == _S_IFDIR)
+#endif
 
 #include "stb_image_write.h"
 
 // stb write callback — appends bytes to a std::vector
-static void stb_write_callback(void *context, void *data, int size) {
+inline void stb_write_callback(void *context, void *data, int size) {
   auto *out = static_cast<std::vector<uint8_t> *>(context);
   auto *bytes = static_cast<uint8_t *>(data);
   out->insert(out->end(), bytes, bytes + size);
@@ -55,8 +60,8 @@ protected:
     // convert BGRA → RGB for stb (which expects RGB)
     void *bufferData = FPDFBitmap_GetBuffer(bitmap);
     int stride = FPDFBitmap_GetStride(bitmap);
-    std::vector<uint8_t> rgb(static_cast<size_t>(renderWidth_) *
-                             renderHeight_ * 3);
+    std::vector<uint8_t> rgb(static_cast<size_t>(renderWidth_) * renderHeight_ *
+                             3);
 
     for (int y = 0; y < renderHeight_; y++) {
       auto *row = static_cast<uint8_t *>(bufferData) + y * stride;
@@ -95,8 +100,7 @@ protected:
       auto sep = parent.find_last_of('/');
 #ifdef _WIN32
       auto bsep = parent.find_last_of('\\');
-      if (bsep != std::string::npos &&
-          (sep == std::string::npos || bsep > sep))
+      if (bsep != std::string::npos && (sep == std::string::npos || bsep > sep))
         sep = bsep;
 #endif
       if (sep != std::string::npos) {
