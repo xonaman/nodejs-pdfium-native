@@ -1,0 +1,6 @@
+.cache/
+node_modules/
+build/
+deps/
+*.tgz
+compile_commands.json

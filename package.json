@@ -1,0 +1,32 @@
+{
+  "name": "pdfium-native",
+  "version": "0.1.0",
+  "description": "Native Node.js bindings for PDFium",
+  "type": "module",
+  "main": "build/Release/pdfium.node",
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64",
+    "arm",
+    "ia32",
+    "ppc64"
+  ],
+  "scripts": {
+    "install": "node scripts/download-pdfium.mjs && node-gyp rebuild && node scripts/bundle-lib.mjs",
+    "build": "node-gyp rebuild && node scripts/bundle-lib.mjs",
+    "download": "node scripts/download-pdfium.mjs",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "node-addon-api": "^8.0.0",
+    "node-gyp": "^11.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.2"
+  }
+}
