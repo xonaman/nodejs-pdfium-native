@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { loadDocument, PDFiumDocument, PDFiumPage } from './index.ts';
+import { loadDocument, PDFiumDocument, PDFiumPage } from './index.js';
 
 // minimal valid PDF: single page (612x792 pts), no content
 const MINIMAL_PDF = `%PDF-1.0

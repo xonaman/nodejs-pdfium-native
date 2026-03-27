@@ -4,7 +4,22 @@
   "description": "Native Node.js bindings for PDFium",
   "license": "MIT",
   "type": "module",
-  "main": "build/Release/pdfium.node",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "lib/index.ts",
+    "scripts",
+    "deps",
+    "binding.gyp"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/xonaman/nodejs-pdfium-native.git"
@@ -27,6 +42,8 @@
   "scripts": {
     "install": "node scripts/download-pdfium.mjs && node-gyp rebuild && node scripts/bundle-lib.mjs",
     "build": "node-gyp rebuild && node scripts/bundle-lib.mjs",
+    "build:ts": "tsc",
+    "prepublishOnly": "tsc",
     "download": "node scripts/download-pdfium.mjs",
     "test": "vitest run",
     "lint": "eslint --fix .",
@@ -44,6 +61,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
     "prettier": "^3.8.1",
+    "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.2",
     "vitest": "^4.1.2"
   }
