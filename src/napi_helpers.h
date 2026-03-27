@@ -5,14 +5,20 @@
 
 #include "fpdfview.h"
 
-static bool g_initialized = false;
+inline bool g_initialized = false;
 
 // PDFium is not thread-safe — serialize all calls through a global mutex.
 // This unblocks the Node.js event loop while waiting for the lock.
-static std::mutex g_pdfium_mutex;
+inline std::mutex g_pdfium_mutex;
 
 // image format constants
 enum ImageFormat { IMAGE_FORMAT_JPEG = 0, IMAGE_FORMAT_PNG = 1 };
+
+// maximum render dimension to prevent OOM (16384 × 16384 × 4 ≈ 1 GB)
+constexpr int MAX_RENDER_DIMENSION = 16384;
+
+// maximum bookmark tree recursion depth
+constexpr int MAX_BOOKMARK_DEPTH = 64;
 
 // helper: create a { left, bottom, right, top } bounds object
 inline Napi::Object CreateBoundsObject(Napi::Env env, double left,

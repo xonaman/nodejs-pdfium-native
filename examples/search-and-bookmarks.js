@@ -7,7 +7,9 @@ const page = await doc.getPage(0);
 const matches = page.search('invoice');
 console.log(`Found ${matches.length} match(es) for "invoice"`);
 for (const match of matches) {
-  console.log(`  "${match.text}" at ${match.rects.length} rect(s)`);
+  console.log(
+    `  charIndex=${match.charIndex}, length=${match.length}, ${match.rects.length} rect(s)`,
+  );
   for (const r of match.rects) {
     console.log(`    (${r.left}, ${r.top}) → (${r.right}, ${r.bottom})`);
   }
@@ -24,7 +26,7 @@ const bookmarks = doc.getBookmarks();
 const printBookmarks = (items, indent = 0) => {
   for (const b of items) {
     console.log(`${'  '.repeat(indent)}▸ ${b.title} (page ${b.pageIndex})`);
-    if (b.children.length) printBookmarks(b.children, indent + 1);
+    if (b.children?.length) printBookmarks(b.children, indent + 1);
   }
 };
 if (bookmarks.length) {

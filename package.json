@@ -28,9 +28,8 @@
   "files": [
     "dist",
     "src",
-    "lib/index.ts",
+    "lib",
     "scripts",
-    "deps",
     "binding.gyp"
   ],
   "repository": {
@@ -65,14 +64,14 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "node-addon-api": "^8.0.0",
-    "node-gyp": "^11.0.0"
+    "node-addon-api": "^8.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.1.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
+    "node-gyp": "^11.0.0",
     "prettier": "^3.8.1",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.2",

@@ -2,6 +2,9 @@
 
 #include "page.h"
 
+#include <atomic>
+#include <memory>
+
 // ---------------------------------------------------------------------------
 // PDFiumDocument
 // ---------------------------------------------------------------------------
@@ -19,7 +22,8 @@ public:
   }
 
   PDFiumDocument(const Napi::CallbackInfo &info)
-      : Napi::ObjectWrap<PDFiumDocument>(info) {}
+      : Napi::ObjectWrap<PDFiumDocument>(info),
+        docAlive_(std::make_shared<std::atomic<bool>>(true)) {}
 
   void SetDocument(FPDF_DOCUMENT doc) { doc_ = doc; }
 
@@ -28,12 +32,22 @@ public:
     ownedBuffer_ = std::move(buf);
   }
 
+  // register a page's alive flag so we can invalidate it on destroy
+  void RegisterPageAlive(std::shared_ptr<std::atomic<bool>> flag) {
+    pageAliveFlags_.push_back(std::move(flag));
+  }
+
+  // returns the document alive flag (shared with pages)
+  std::shared_ptr<std::atomic<bool>> GetDocAlive() const { return docAlive_; }
+
   // store the page constructor so we can create instances
   static Napi::FunctionReference pageConstructor;
 
 private:
   FPDF_DOCUMENT doc_ = nullptr;
   std::vector<uint8_t> ownedBuffer_;
+  std::shared_ptr<std::atomic<bool>> docAlive_;
+  std::vector<std::shared_ptr<std::atomic<bool>>> pageAliveFlags_;
 
   void EnsureOpen(Napi::Env env) {
     if (!doc_) {
@@ -56,11 +70,16 @@ private:
     if (env.IsExceptionPending())
       return env.Null();
 
-    return BuildBookmarkArray(env, nullptr);
+    std::lock_guard<std::mutex> lock(g_pdfium_mutex);
+    return BuildBookmarkArray(env, nullptr, 0);
   }
 
-  Napi::Array BuildBookmarkArray(Napi::Env env, FPDF_BOOKMARK parent) {
+  Napi::Array BuildBookmarkArray(Napi::Env env, FPDF_BOOKMARK parent,
+                                 int depth) {
     Napi::Array arr = Napi::Array::New(env);
+    if (depth >= MAX_BOOKMARK_DEPTH)
+      return arr;
+
     uint32_t idx = 0;
     FPDF_BOOKMARK child = FPDFBookmark_GetFirstChild(doc_, parent);
 
@@ -99,7 +118,7 @@ private:
       }
 
       // children (recursive)
-      Napi::Array children = BuildBookmarkArray(env, child);
+      Napi::Array children = BuildBookmarkArray(env, child, depth + 1);
       if (children.Length() > 0) {
         obj.Set("children", children);
       }
@@ -115,6 +134,14 @@ private:
    */
   Napi::Value Destroy(const Napi::CallbackInfo &info) {
     if (doc_) {
+      // invalidate all pages first so they can't use dangling pointers
+      for (auto &flag : pageAliveFlags_) {
+        flag->store(false);
+      }
+      pageAliveFlags_.clear();
+      docAlive_->store(false);
+
+      std::lock_guard<std::mutex> lock(g_pdfium_mutex);
       FPDF_CloseDocument(doc_);
       doc_ = nullptr;
     }
@@ -128,15 +155,25 @@ private:
 
 class GetPageWorker : public Napi::AsyncWorker {
 public:
-  GetPageWorker(Napi::Env env, FPDF_DOCUMENT doc, int pageIndex)
+  GetPageWorker(Napi::Env env, FPDF_DOCUMENT doc, int pageIndex,
+                PDFiumDocument *docWrapper,
+                std::shared_ptr<std::atomic<bool>> docAlive)
       : Napi::AsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
-        doc_(doc), pageIndex_(pageIndex) {}
+        doc_(doc), pageIndex_(pageIndex), docWrapper_(docWrapper),
+        docAlive_(std::move(docAlive)) {}
 
   Napi::Promise Promise() { return deferred_.Promise(); }
 
 protected:
   void Execute() override {
     std::lock_guard<std::mutex> lock(g_pdfium_mutex);
+
+    // check that the document hasn't been destroyed while we were queued
+    if (!docAlive_ || !docAlive_->load()) {
+      SetError("Document was destroyed before page load completed");
+      return;
+    }
+
     page_ = FPDF_LoadPage(doc_, pageIndex_);
     if (!page_) {
       SetError("Failed to load page");
@@ -152,6 +189,10 @@ protected:
     Napi::Object pageObj = PDFiumDocument::pageConstructor.New({});
     PDFiumPage *pageWrapper = PDFiumPage::Unwrap(pageObj);
     pageWrapper->SetPage(page_, doc_, pageIndex_);
+    pageWrapper->SetDocAlive(docAlive_);
+
+    // register the page's alive flag with the document for invalidation
+    docWrapper_->RegisterPageAlive(pageWrapper->GetAliveFlag());
 
     // set dimensions as plain JS properties (no native roundtrip on access)
     pageObj.Set("width", Napi::Number::New(env, width_));
@@ -173,6 +214,8 @@ private:
   Napi::Promise::Deferred deferred_;
   FPDF_DOCUMENT doc_;
   int pageIndex_;
+  PDFiumDocument *docWrapper_;
+  std::shared_ptr<std::atomic<bool>> docAlive_;
   FPDF_PAGE page_ = nullptr;
   float width_ = 0;
   float height_ = 0;
@@ -201,7 +244,7 @@ PDFiumDocument::GetPageAsync(const Napi::CallbackInfo &info) {
     return env.Null();
   }
 
-  auto *worker = new GetPageWorker(env, doc_, pageIndex);
+  auto *worker = new GetPageWorker(env, doc_, pageIndex, this, docAlive_);
   auto promise = worker->Promise();
   worker->Queue();
   return promise;

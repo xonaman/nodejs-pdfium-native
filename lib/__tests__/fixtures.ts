@@ -1,4 +1,7 @@
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // minimal valid PDF: single page (612×792 pts), no content
 export const MINIMAL_PDF = `%PDF-1.0
@@ -61,7 +64,7 @@ export const pdfBuffer = Buffer.from(MINIMAL_PDF);
 export const twoPagesBuffer = Buffer.from(TWO_PAGE_PDF);
 export const textPdfBuffer = Buffer.from(TEXT_PDF);
 
-export const fixturesDir = resolve(import.meta.dirname!, '..', '..', 'test', 'fixtures');
+export const fixturesDir = resolve(__dirname, '..', '..', 'test', 'fixtures');
 
 export function fixturePath(name: string): string {
   return resolve(fixturesDir, name);

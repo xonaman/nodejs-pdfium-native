@@ -2,7 +2,10 @@
 
 #include "napi_helpers.h"
 
+#include <atomic>
 #include <cstdio>
+#include <memory>
+#include <sys/stat.h>
 
 #include "stb_image_write.h"
 
@@ -19,19 +22,25 @@ static void stb_write_callback(void *context, void *data, int size) {
 
 class RenderWorker : public Napi::AsyncWorker {
 public:
-  // format: IMAGE_FORMAT_JPEG or IMAGE_FORMAT_PNG
   RenderWorker(Napi::Env env, FPDF_PAGE page, int renderWidth, int renderHeight,
-               int format, int quality, std::string outputPath)
+               int format, int quality, std::string outputPath,
+               std::shared_ptr<std::atomic<bool>> pageAlive)
       : Napi::AsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
         page_(page), renderWidth_(renderWidth), renderHeight_(renderHeight),
-        format_(format), quality_(quality), outputPath_(std::move(outputPath)) {
-  }
+        format_(format), quality_(quality), outputPath_(std::move(outputPath)),
+        pageAlive_(std::move(pageAlive)) {}
 
   Napi::Promise Promise() { return deferred_.Promise(); }
 
 protected:
   void Execute() override {
     std::lock_guard<std::mutex> lock(g_pdfium_mutex);
+
+    // check that the page hasn't been closed while we were queued
+    if (!pageAlive_ || !pageAlive_->load()) {
+      SetError("Page was closed before render completed");
+      return;
+    }
 
     FPDF_BITMAP bitmap = FPDFBitmap_Create(renderWidth_, renderHeight_, 0);
     if (!bitmap) {
@@ -46,7 +55,8 @@ protected:
     // convert BGRA → RGB for stb (which expects RGB)
     void *bufferData = FPDFBitmap_GetBuffer(bitmap);
     int stride = FPDFBitmap_GetStride(bitmap);
-    std::vector<uint8_t> rgb(renderWidth_ * renderHeight_ * 3);
+    std::vector<uint8_t> rgb(static_cast<size_t>(renderWidth_) *
+                             renderHeight_ * 3);
 
     for (int y = 0; y < renderHeight_; y++) {
       auto *row = static_cast<uint8_t *>(bufferData) + y * stride;
@@ -80,6 +90,24 @@ protected:
 
     // write to file if output path was specified
     if (!outputPath_.empty()) {
+      // verify parent directory exists
+      std::string parent = outputPath_;
+      auto sep = parent.find_last_of('/');
+#ifdef _WIN32
+      auto bsep = parent.find_last_of('\\');
+      if (bsep != std::string::npos &&
+          (sep == std::string::npos || bsep > sep))
+        sep = bsep;
+#endif
+      if (sep != std::string::npos) {
+        parent.resize(sep);
+        struct stat st;
+        if (stat(parent.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) {
+          SetError("Parent directory does not exist: " + parent);
+          return;
+        }
+      }
+
       FILE *f = fopen(outputPath_.c_str(), "wb");
       if (!f) {
         SetError("Failed to open output file: " + outputPath_);
@@ -119,4 +147,5 @@ private:
   int quality_;
   std::string outputPath_;
   std::vector<uint8_t> encodedData_;
+  std::shared_ptr<std::atomic<bool>> pageAlive_;
 };

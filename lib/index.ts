@@ -1,15 +1,17 @@
 import { createRequire } from 'node:module';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { PDFiumDocument } from './document.js';
 import { parseNativeError } from './errors.js';
 import type { NativeAddon } from './types.js';
 
 const require = createRequire(import.meta.url);
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 type PdfInput = Buffer | string;
 
 // ensure the dynamic linker can find libpdfium next to pdfium.node
-const addonDir = resolve(import.meta.dirname!, '..', 'build', 'Release');
+const addonDir = resolve(__dirname, '..', 'build', 'Release');
 if (process.platform === 'win32') {
   process.env.PATH = `${addonDir};${process.env.PATH ?? ''}`;
 } else {

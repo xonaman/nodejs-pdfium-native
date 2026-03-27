@@ -2,6 +2,9 @@
 
 #include "render_worker.h"
 
+#include <algorithm>
+#include <atomic>
+#include <memory>
 #include <string>
 
 #include "fpdf_annot.h"
@@ -35,7 +38,8 @@ public:
   }
 
   PDFiumPage(const Napi::CallbackInfo &info)
-      : Napi::ObjectWrap<PDFiumPage>(info) {}
+      : Napi::ObjectWrap<PDFiumPage>(info),
+        alive_(std::make_shared<std::atomic<bool>>(true)) {}
 
   void SetPage(FPDF_PAGE page, FPDF_DOCUMENT doc, int index) {
     page_ = page;
@@ -43,14 +47,31 @@ public:
     index_ = index;
   }
 
+  // called by document to give this page a reference to the document's alive
+  // flag so we can detect doc.destroy() from page methods
+  void SetDocAlive(std::shared_ptr<std::atomic<bool>> docAlive) {
+    docAlive_ = std::move(docAlive);
+  }
+
+  // returns the page alive flag (shared with RenderWorker and document)
+  std::shared_ptr<std::atomic<bool>> GetAliveFlag() const { return alive_; }
+
 private:
   FPDF_PAGE page_ = nullptr;
   FPDF_DOCUMENT doc_ = nullptr;
   int index_ = -1;
+  std::shared_ptr<std::atomic<bool>> alive_;
+  std::shared_ptr<std::atomic<bool>> docAlive_;
 
   void EnsureOpen(Napi::Env env) {
-    if (!page_) {
+    if (!alive_->load()) {
       Napi::Error::New(env, "Page is closed").ThrowAsJavaScriptException();
+      return;
+    }
+    if (docAlive_ && !docAlive_->load()) {
+      Napi::Error::New(env, "Document is destroyed")
+          .ThrowAsJavaScriptException();
+      return;
     }
   }
 
@@ -66,6 +87,8 @@ private:
     EnsureOpen(env);
     if (env.IsExceptionPending())
       return env.Null();
+
+    std::lock_guard<std::mutex> lock(g_pdfium_mutex);
 
     FPDF_TEXTPAGE textPage = FPDFText_LoadPage(page_);
     if (!textPage) {
@@ -110,8 +133,14 @@ private:
 
     if (info.Length() > 0 && info[0].IsObject()) {
       Napi::Object opts = info[0].As<Napi::Object>();
-      if (opts.Has("scale"))
+      if (opts.Has("scale")) {
         scale = opts.Get("scale").As<Napi::Number>().DoubleValue();
+        if (scale <= 0) {
+          Napi::RangeError::New(env, "scale must be positive")
+              .ThrowAsJavaScriptException();
+          return env.Null();
+        }
+      }
       if (opts.Has("width"))
         renderWidth = opts.Get("width").As<Napi::Number>().Int32Value();
       if (opts.Has("height"))
@@ -132,8 +161,27 @@ private:
     if (renderHeight == 0)
       renderHeight = static_cast<int>(origHeight * scale);
 
-    auto *worker = new RenderWorker(env, page_, renderWidth, renderHeight,
-                                    format, quality, std::move(outputPath));
+    // validate dimensions
+    if (renderWidth <= 0 || renderHeight <= 0) {
+      Napi::RangeError::New(env, "Render dimensions must be positive")
+          .ThrowAsJavaScriptException();
+      return env.Null();
+    }
+    if (renderWidth > MAX_RENDER_DIMENSION ||
+        renderHeight > MAX_RENDER_DIMENSION) {
+      Napi::RangeError::New(
+          env, "Render dimensions exceed maximum (" +
+                   std::to_string(MAX_RENDER_DIMENSION) + ")")
+          .ThrowAsJavaScriptException();
+      return env.Null();
+    }
+
+    // clamp quality to valid range
+    quality = std::clamp(quality, 1, 100);
+
+    auto *worker =
+        new RenderWorker(env, page_, renderWidth, renderHeight, format, quality,
+                         std::move(outputPath), alive_);
     auto promise = worker->Promise();
     worker->Queue();
     return promise;
@@ -153,6 +201,8 @@ private:
           .ThrowAsJavaScriptException();
       return env.Null();
     }
+
+    std::lock_guard<std::mutex> lock(g_pdfium_mutex);
 
     int idx = info[0].As<Napi::Number>().Int32Value();
     FPDF_PAGEOBJECT obj = FPDFPage_GetObject(page_, idx);
@@ -277,6 +327,8 @@ private:
     if (env.IsExceptionPending())
       return env.Null();
 
+    std::lock_guard<std::mutex> lock(g_pdfium_mutex);
+
     Napi::Array links = Napi::Array::New(env);
     int pos = 0;
     FPDF_LINK link;
@@ -347,6 +399,8 @@ private:
         flags |= FPDF_MATCHWHOLEWORD;
     }
 
+    std::lock_guard<std::mutex> lock(g_pdfium_mutex);
+
     FPDF_TEXTPAGE textPage = FPDFText_LoadPage(page_);
     if (!textPage) {
       return Napi::Array::New(env, 0);
@@ -397,6 +451,8 @@ private:
     EnsureOpen(env);
     if (env.IsExceptionPending())
       return env.Null();
+
+    std::lock_guard<std::mutex> lock(g_pdfium_mutex);
 
     int count = FPDFPage_GetAnnotCount(page_);
     Napi::Array annotations = Napi::Array::New(env, count > 0 ? count : 0);
@@ -507,8 +563,11 @@ private:
    */
   Napi::Value Close(const Napi::CallbackInfo &info) {
     if (page_) {
+      alive_->store(false);
+      std::lock_guard<std::mutex> lock(g_pdfium_mutex);
       FPDF_ClosePage(page_);
       page_ = nullptr;
+      doc_ = nullptr;
     }
     return info.Env().Undefined();
   }
