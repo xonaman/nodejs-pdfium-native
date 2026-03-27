@@ -46,7 +46,7 @@
             "libraries": [
               "-L<(module_root_dir)/deps/pdfium/lib",
               "-lpdfium",
-              "-Wl,-rpath,$$ORIGIN",
+              "-Wl,-rpath,'$$ORIGIN'",
               "-lpthread",
               "-ldl"
             ]

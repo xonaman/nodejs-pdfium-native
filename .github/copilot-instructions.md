@@ -56,19 +56,19 @@ npm run lint        # Auto-fix lint issues
 
 ## Project Structure
 
-| Path | Purpose |
-|------|---------|
-| `src/pdfium_addon.cc` | C++ native addon (N-API). All PDF operations. |
-| `src/stb_image_write.h` | Single-header C lib for JPEG/PNG encoding |
-| `lib/index.ts` | TypeScript ESM wrapper, types, error classes |
-| `lib/index.test.ts` | Vitest tests (38 tests) |
-| `dist/` | Compiled JS + declarations (generated, gitignored) |
-| `build/Release/` | Compiled .node + shared lib (generated, gitignored) |
-| `deps/pdfium/` | Downloaded PDFium headers + lib (gitignored) |
-| `scripts/` | Build/install/download scripts (ESM .mjs) |
-| `examples/` | Standalone usage examples |
-| `test/fixtures/` | PDF fixtures (metadata, bookmarks, links, annotations) |
-| `binding.gyp` | node-gyp build config (macOS/Linux/Windows) |
+| Path                    | Purpose                                                |
+| ----------------------- | ------------------------------------------------------ |
+| `src/pdfium_addon.cc`   | C++ native addon (N-API). All PDF operations.          |
+| `src/stb_image_write.h` | Single-header C lib for JPEG/PNG encoding              |
+| `lib/index.ts`          | TypeScript ESM wrapper, types, error classes           |
+| `lib/index.test.ts`     | Vitest tests (38 tests)                                |
+| `dist/`                 | Compiled JS + declarations (generated, gitignored)     |
+| `build/Release/`        | Compiled .node + shared lib (generated, gitignored)    |
+| `deps/pdfium/`          | Downloaded PDFium headers + lib (gitignored)           |
+| `scripts/`              | Build/install/download scripts (ESM .mjs)              |
+| `examples/`             | Standalone usage examples                              |
+| `test/fixtures/`        | PDF fixtures (metadata, bookmarks, links, annotations) |
+| `binding.gyp`           | node-gyp build config (macOS/Linux/Windows)            |
 
 ### Generated Files (DO NOT EDIT)
 
@@ -88,6 +88,7 @@ Two main classes exposed to JS via N-API:
 - **PDFiumPage**: Wraps `FPDF_PAGE`. Properties: `number`, `width`, `height`, `size`, `objectCount`. Methods: `getText()`, `render()`, `getObject()`, `getLinks()`, `search()`, `getAnnotations()`, `close()`.
 
 Key patterns:
+
 - **Global mutex**: `std::mutex g_pdfium_mutex` — PDFium is NOT thread-safe. All operations acquire this lock.
 - **AsyncWorkers**: `LoadDocumentWorker`, `GetPageWorker`, `RenderWorker` — expensive ops run off the main thread via `Napi::AsyncWorker`.
 - **Properties in OnOK()**: Cached properties (width, height, metadata, pageCount) are set as plain JS properties in `AsyncWorker::OnOK()`, not as native getters.
@@ -183,14 +184,15 @@ Tests use inline PDF strings for simple cases and `test/fixtures/*.pdf` for rich
 
 ## Platform Support
 
-| OS | Architectures |
-|----|---------------|
-| macOS | arm64, x64 |
+| OS            | Architectures                |
+| ------------- | ---------------------------- |
+| macOS         | arm64, x64                   |
 | Linux (glibc) | x64, arm64, arm, ia32, ppc64 |
-| Linux (musl) | x64, arm64, ia32 |
-| Windows | x64, arm64, ia32 |
+| Linux (musl)  | x64, arm64, ia32             |
+| Windows       | x64, arm64, ia32             |
 
 Shared library linking:
+
 - **macOS**: `@loader_path` rpath, `install_name_tool` fix in `bundle-lib.mjs`
 - **Linux**: `$ORIGIN` rpath
 - **Windows**: DLL copied via `binding.gyp` copies directive

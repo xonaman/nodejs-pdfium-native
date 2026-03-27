@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { resolve } from 'node:path';
 
 const require = createRequire(import.meta.url);
 
@@ -225,6 +226,14 @@ interface NativeDocument {
 
 interface NativeAddon {
   loadDocument(input: PdfInput, password?: string): Promise<NativeDocument>;
+}
+
+// ensure the dynamic linker can find libpdfium next to pdfium.node
+const addonDir = resolve(import.meta.dirname!, '..', 'build', 'Release');
+if (process.platform === 'win32') {
+  process.env.PATH = `${addonDir};${process.env.PATH ?? ''}`;
+} else {
+  process.env.LD_LIBRARY_PATH = `${addonDir}:${process.env.LD_LIBRARY_PATH ?? ''}`;
 }
 
 const addon: NativeAddon = require('../build/Release/pdfium.node');
