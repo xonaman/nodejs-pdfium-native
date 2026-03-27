@@ -1,10 +1,17 @@
 {
-  "name": "pdfium-native",
+  "name": "@xonaman/pdfium-native",
   "version": "0.1.0",
   "description": "Native Node.js bindings for PDFium",
   "license": "MIT",
   "type": "module",
   "main": "build/Release/pdfium.node",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xonaman/nodejs-pdfium-native.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "os": [
     "darwin",
     "linux",
