@@ -4,7 +4,6 @@ import type {
   NativePage,
   PageObject,
   PageRenderOptions,
-  PageSize,
   SearchMatch,
   SearchOptions,
 } from './types.js';
@@ -17,8 +16,6 @@ export class PDFiumPage {
   readonly width: number;
   /** Page height in points (1 pt = 1/72 inch). */
   readonly height: number;
-  /** Page dimensions in points. */
-  readonly size: PageSize;
   /** 0-based page index. */
   readonly number: number;
   /** Number of page objects (text spans, paths, images, etc.). */
@@ -28,7 +25,6 @@ export class PDFiumPage {
   constructor(private native: NativePage) {
     this.width = native.width;
     this.height = native.height;
-    this.size = native.size;
     this.number = native.number;
     this.objectCount = native.objectCount;
   }

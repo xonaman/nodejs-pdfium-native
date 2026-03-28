@@ -142,13 +142,12 @@ Closes the document and frees all native resources. Must be called when done.
 
 ### PDFiumPage
 
-| Property      | Type                | Description                                         |
-| ------------- | ------------------- | --------------------------------------------------- |
-| `width`       | `number`            | Page width in points (1 pt = 1/72 inch).            |
-| `height`      | `number`            | Page height in points.                              |
-| `size`        | `{ width, height }` | Page dimensions.                                    |
-| `number`      | `number`            | 0-based page index.                                 |
-| `objectCount` | `number`            | Number of page objects (text, images, paths, etc.). |
+| Property      | Type     | Description                                         |
+| ------------- | -------- | --------------------------------------------------- |
+| `width`       | `number` | Page width in points (1 pt = 1/72 inch).            |
+| `height`      | `number` | Page height in points.                              |
+| `number`      | `number` | 0-based page index.                                 |
+| `objectCount` | `number` | Number of page objects (text, images, paths, etc.). |
 
 #### `getText()`
 

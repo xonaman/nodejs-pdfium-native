@@ -1,8 +1,3 @@
-export interface PageSize {
-  width: number;
-  height: number;
-}
-
 export interface PageRenderOptions {
   /** Scale factor (default: 1, meaning 72 DPI). Use 3–4 for print quality. */
   scale?: number;
@@ -175,7 +170,6 @@ export interface NativePage {
   readonly number: number;
   readonly width: number;
   readonly height: number;
-  readonly size: PageSize;
   readonly objectCount: number;
   getText(): Promise<string>;
   render(options?: PageRenderOptions): Promise<Buffer | void>;

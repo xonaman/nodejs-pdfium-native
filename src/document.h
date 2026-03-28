@@ -158,10 +158,6 @@ protected:
     // set dimensions as plain JS properties (no native roundtrip on access)
     pageObj.Set("width", Napi::Number::New(env, width_));
     pageObj.Set("height", Napi::Number::New(env, height_));
-    Napi::Object sizeObj = Napi::Object::New(env);
-    sizeObj.Set("width", Napi::Number::New(env, width_));
-    sizeObj.Set("height", Napi::Number::New(env, height_));
-    pageObj.Set("size", sizeObj);
     pageObj.Set("objectCount", Napi::Number::New(env, objectCount_));
 
     deferred_.Resolve(pageObj);

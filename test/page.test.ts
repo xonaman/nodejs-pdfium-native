@@ -30,13 +30,6 @@ describe('PDFiumPage', () => {
     expect(page.height).toBeCloseTo(792, 0);
   });
 
-  it('size returns { width, height }', () => {
-    expect(page.size).toHaveProperty('width');
-    expect(page.size).toHaveProperty('height');
-    expect(page.size.width).toBeCloseTo(612, 0);
-    expect(page.size.height).toBeCloseTo(792, 0);
-  });
-
   it('getText returns a string', async () => {
     const text = await page.getText();
     expect(typeof text).toBe('string');

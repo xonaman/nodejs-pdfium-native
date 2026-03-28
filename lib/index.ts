@@ -56,7 +56,6 @@ export type {
   PageObjectBounds,
   PageObjectType,
   PageRenderOptions,
-  PageSize,
   RGBA,
   SearchMatch,
   SearchOptions,
