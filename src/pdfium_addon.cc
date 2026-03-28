@@ -197,6 +197,12 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   if (!g_initialized) {
     FPDF_InitLibrary();
     g_initialized = true;
+
+    // clean up PDFium on environment teardown
+    env.AddCleanupHook([]() {
+      FPDF_DestroyLibrary();
+      g_initialized = false;
+    });
   }
 
   // register classes

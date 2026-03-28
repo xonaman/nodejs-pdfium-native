@@ -34,7 +34,7 @@ export class PDFiumPage {
   }
 
   /** Extracts all text from the page. */
-  getText(): string {
+  getText(): Promise<string> {
     return this.native.getText();
   }
 
@@ -47,12 +47,12 @@ export class PDFiumPage {
   }
 
   /** Returns the page object at the given index with type and bounds. */
-  getObject(index: number): PageObject {
+  getObject(index: number): Promise<PageObject> {
     return this.native.getObject(index);
   }
 
   /** Iterates over all page objects (text spans, paths, images, etc.). */
-  *objects(): Generator<PageObject> {
+  async *objects(): AsyncGenerator<PageObject> {
     for (let i = 0; i < this.objectCount; i++) {
       yield this.getObject(i);
     }
@@ -64,17 +64,17 @@ export class PDFiumPage {
   }
 
   /** Returns all links on the page. */
-  getLinks(): Link[] {
+  getLinks(): Promise<Link[]> {
     return this.native.getLinks();
   }
 
   /** Searches for text on the page. Returns matches with positions and bounding rects. */
-  search(text: string, options?: SearchOptions): SearchMatch[] {
+  search(text: string, options?: SearchOptions): Promise<SearchMatch[]> {
     return this.native.search(text, options);
   }
 
   /** Returns all annotations on the page. */
-  getAnnotations(): Annotation[] {
+  getAnnotations(): Promise<Annotation[]> {
     return this.native.getAnnotations();
   }
 }

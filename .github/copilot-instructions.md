@@ -6,7 +6,7 @@
 **Languages**: C++ (N-API addon), TypeScript (ESM wrapper + types)  
 **PDFium**: bblanchon/pdfium-binaries (chromium/7749, prebuilt shared libraries)  
 **Package**: `pdfium-native`, published to npmjs  
-**Size**: Single C++ source (~1100 lines), single TS wrapper (~300 lines), 38 tests
+**Size**: ~8 C++ headers/source files, ~5 TS files, 38 tests across 6 test files
 
 Trust these instructions. Only perform additional exploration if information is incomplete.
 
@@ -56,19 +56,27 @@ npm run lint        # Auto-fix lint issues
 
 ## Project Structure
 
-| Path                    | Purpose                                                |
-| ----------------------- | ------------------------------------------------------ |
-| `src/pdfium_addon.cc`   | C++ native addon (N-API). All PDF operations.          |
-| `src/stb_image_write.h` | Single-header C lib for JPEG/PNG encoding              |
-| `lib/index.ts`          | TypeScript ESM wrapper, types, error classes           |
-| `lib/index.test.ts`     | Vitest tests (38 tests)                                |
-| `dist/`                 | Compiled JS + declarations (generated, gitignored)     |
-| `build/Release/`        | Compiled .node + shared lib (generated, gitignored)    |
-| `deps/pdfium/`          | Downloaded PDFium headers + lib (gitignored)           |
-| `scripts/`              | Build/install/download scripts (ESM .mjs)              |
-| `examples/`             | Standalone usage examples                              |
-| `test/fixtures/`        | PDF fixtures (metadata, bookmarks, links, annotations) |
-| `binding.gyp`           | node-gyp build config (macOS/Linux/Windows)            |
+| Path                    | Purpose                                                                          |
+| ----------------------- | -------------------------------------------------------------------------------- |
+| `src/pdfium_addon.cc`   | C++ addon entry: module init, `LoadDocumentWorker`                               |
+| `src/document.h`        | `PDFiumDocument` class, `GetPageWorker`                                          |
+| `src/page.h`            | `PDFiumPage` class (all page methods dispatch workers)                           |
+| `src/page_workers.h`    | AsyncWorkers: GetText, Search, GetLinks, GetAnnotations, GetObject, GetBookmarks |
+| `src/render_worker.h`   | `RenderWorker` for page rendering                                                |
+| `src/napi_helpers.h`    | Shared mutex, constants, helper functions                                        |
+| `src/stb_image_write.h` | Single-header C lib for JPEG/PNG encoding                                        |
+| `lib/index.ts`          | Main export, `loadDocument()`, error parsing                                     |
+| `lib/document.ts`       | `PDFiumDocument` TS wrapper                                                      |
+| `lib/page.ts`           | `PDFiumPage` TS wrapper                                                          |
+| `lib/types.ts`          | All TypeScript interfaces and types                                              |
+| `lib/errors.ts`         | Typed error classes                                                              |
+| `dist/`                 | Compiled JS + declarations (generated, gitignored)                               |
+| `build/Release/`        | Compiled .node + shared lib (generated, gitignored)                              |
+| `deps/pdfium/`          | Downloaded PDFium headers + lib (gitignored)                                     |
+| `scripts/`              | Build/install/download scripts (ESM .mjs)                                        |
+| `test/*.test.ts`        | Vitest tests (6 files, 38 tests)                                                 |
+| `test/fixtures/`        | PDF fixtures (generated via pdf-lib)                                             |
+| `binding.gyp`           | node-gyp build config (macOS/Linux/Windows)                                      |
 
 ### Generated Files (DO NOT EDIT)
 
@@ -80,26 +88,29 @@ npm run lint        # Auto-fix lint issues
 
 ## Architecture
 
-### C++ Layer (`src/pdfium_addon.cc`)
+### C++ Layer
 
 Two main classes exposed to JS via N-API:
 
-- **PDFiumDocument**: Wraps `FPDF_DOCUMENT`. Properties: `pageCount`, `metadata`. Methods: `getPage()`, `getBookmarks()`, `destroy()`.
-- **PDFiumPage**: Wraps `FPDF_PAGE`. Properties: `number`, `width`, `height`, `size`, `objectCount`. Methods: `getText()`, `render()`, `getObject()`, `getLinks()`, `search()`, `getAnnotations()`, `close()`.
+- **PDFiumDocument** (`src/document.h`): Wraps `FPDF_DOCUMENT`. Properties: `pageCount`, `metadata`. Methods: `getPage()` → Promise, `getBookmarks()` → Promise, `destroy()`. Has `Finalize()` GC destructor as safety net.
+- **PDFiumPage** (`src/page.h`): Wraps `FPDF_PAGE`. Properties: `number`, `width`, `height`, `size`, `objectCount`. Methods: `getText()` → Promise, `render()` → Promise, `getObject()` → Promise, `getLinks()` → Promise, `search()` → Promise, `getAnnotations()` → Promise, `close()`. Has `Finalize()` GC destructor as safety net.
 
 Key patterns:
 
-- **Global mutex**: `std::mutex g_pdfium_mutex` — PDFium is NOT thread-safe. All operations acquire this lock.
-- **AsyncWorkers**: `LoadDocumentWorker`, `GetPageWorker`, `RenderWorker` — expensive ops run off the main thread via `Napi::AsyncWorker`.
+- **All methods are async**: Every expensive operation runs off the main thread via `Napi::AsyncWorker`. Workers extract raw data into C++ structs in `Execute()` (under mutex, on worker thread), then convert to N-API objects in `OnOK()` (on main thread).
+- **Global mutex**: `std::mutex g_pdfium_mutex` — PDFium is NOT thread-safe. All PDFium API calls acquire this lock.
+- **AsyncWorkers**: `LoadDocumentWorker`, `GetPageWorker`, `RenderWorker` (in respective files), plus `GetTextWorker`, `SearchWorker`, `GetLinksWorker`, `GetAnnotationsWorker`, `GetObjectWorker`, `GetBookmarksWorker` (all in `page_workers.h`).
+- **Lifecycle management**: `shared_ptr<atomic<bool>>` alive flags shared between documents/pages/workers. Flags are set under mutex in `CleanUp()`. Workers check alive flags before proceeding.
 - **Properties in OnOK()**: Cached properties (width, height, metadata, pageCount) are set as plain JS properties in `AsyncWorker::OnOK()`, not as native getters.
 - **Error format**: `GetPdfiumErrorMessage()` returns `"CODE:message"` (e.g., `"PASSWORD:Password required or incorrect"`). The TS layer parses this into typed error classes.
 
-### TypeScript Layer (`lib/index.ts`)
+### TypeScript Layer (`lib/`)
 
-- Loads native addon via `createRequire(import.meta.url)('../build/Release/pdfium.node')`
-- Exports typed error classes: `PDFiumError` (base), `PDFiumFileError`, `PDFiumFormatError`, `PDFiumPasswordError`, `PDFiumSecurityError`
-- `parseNativeError()` maps C++ error strings to typed errors
-- All interfaces exported: `PageSize`, `PageRenderOptions`, `SearchMatch`, `Bookmark`, `Link`, `Annotation`, `DocumentMetadata`, etc.
+- `index.ts`: Loads native addon, exports `loadDocument()`, re-exports all types
+- `document.ts`: `PDFiumDocument` class wrapping native document
+- `page.ts`: `PDFiumPage` class wrapping native page
+- `types.ts`: All interfaces (`NativePage`, `NativeDocument`, `PageObject`, `SearchMatch`, `Bookmark`, `Link`, `Annotation`, etc.)
+- `errors.ts`: Typed error classes: `PDFiumError` (base), `PDFiumFileError`, `PDFiumFormatError`, `PDFiumPasswordError`, `PDFiumSecurityError`
 
 ### Install Flow (`scripts/install.mjs`)
 
@@ -151,7 +162,7 @@ it('rejects with PDFiumFormatError for invalid data', async () => {
 });
 ```
 
-Tests use inline PDF strings for simple cases and `test/fixtures/*.pdf` for rich features (bookmarks, links, annotations).
+Tests use `test/fixtures/*.pdf` (generated via `scripts/generate-fixtures.mjs` using pdf-lib).
 
 ---
 
@@ -160,7 +171,7 @@ Tests use inline PDF strings for simple cases and `test/fixtures/*.pdf` for rich
 - **Strict mode**: `strict: true`, `noUncheckedIndexedAccess: true`
 - **ESM only**: `"type": "module"` in package.json
 - **Target**: ESNext with bundler module resolution
-- **Single source file**: `lib/index.ts` — all types, classes, and exports in one file
+- **Multi-file**: Types in `lib/types.ts`, classes in separate files, barrel export from `lib/index.ts`
 
 ---
 
@@ -170,6 +181,7 @@ Tests use inline PDF strings for simple cases and `test/fixtures/*.pdf` for rich
 - **N-API / node-addon-api**: ABI-stable addon API
 - **No raw pointers in JS**: All PDFium handles wrapped in classes with proper cleanup
 - **Thread safety**: Always acquire `g_pdfium_mutex` before any PDFium API call
+- **Finalize callbacks**: Both Document and Page have `Finalize()` destructors for GC cleanup
 - **RAII**: Document and page handles closed in destructors / explicit close methods
 
 ---
@@ -177,19 +189,18 @@ Tests use inline PDF strings for simple cases and `test/fixtures/*.pdf` for rich
 ## CI/CD Pipeline (GitHub Actions)
 
 **CI** (`ci.yml`): Push/PR to `main` → test matrix (ubuntu/macOS/Windows × Node 20/22/24)  
-**Publish** (`publish.yml`): Release published → same test matrix → npm publish to GitHub Packages  
-**Prebuild** (`prebuild.yml`): Release published → build per-platform tarballs → upload to GitHub release
+**Release** (`release.yml`): Tag push `v*` → test → prebuild (8 platform tarballs) → npm publish + GitHub release
 
 ---
 
 ## Platform Support
 
-| OS            | Architectures                |
-| ------------- | ---------------------------- |
-| macOS         | arm64, x64                   |
-| Linux (glibc) | x64, arm64, arm, ia32, ppc64 |
-| Linux (musl)  | x64, arm64, ia32             |
-| Windows       | x64, arm64, ia32             |
+| OS            | Architectures          |
+| ------------- | ---------------------- |
+| macOS         | arm64, x64             |
+| Linux (glibc) | x64, arm64, arm, ppc64 |
+| Linux (musl)  | x64, arm64             |
+| Windows       | x64, arm64             |
 
 Shared library linking:
 
@@ -201,7 +212,7 @@ Shared library linking:
 
 ## Quick Reference
 
-**Add a new PDF feature**: Implement in `src/pdfium_addon.cc` (C++ method on PDFiumPage or PDFiumDocument) → expose via N-API → add TS types and wrapper in `lib/index.ts` → add tests in `lib/index.test.ts`
+**Add a new PDF feature**: Implement C++ worker in `src/page_workers.h` → add method to `src/page.h` or `src/document.h` → update TS types in `lib/types.ts` → update wrapper in `lib/page.ts` or `lib/document.ts` → add tests in `test/`
 
 **Add a test fixture**: Use `scripts/generate-fixtures.mjs` (requires `pdf-lib`, install with `npm install --no-save pdf-lib`)
 

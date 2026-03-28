@@ -30,7 +30,7 @@ const doc = await loadDocument('invoice.pdf');
 const page = await doc.getPage(0);
 
 // extract text
-const text = page.getText();
+const text = await page.getText();
 
 // render to buffer
 const jpeg = await page.render({ scale: 3, format: 'jpeg', quality: 90 });
@@ -73,14 +73,14 @@ Async generator that yields every page. Caller must close each page.
 
 ```typescript
 for await (const page of doc.pages()) {
-  console.log(page.getText());
+  console.log(await page.getText());
   page.close();
 }
 ```
 
 #### `getBookmarks()`
 
-Returns the bookmark/outline tree as `Bookmark[]`.
+Returns the bookmark/outline tree. Returns `Promise<Bookmark[]>`.
 
 ```typescript
 interface Bookmark {
@@ -108,7 +108,7 @@ Closes the document and frees all native resources. Must be called when done.
 
 #### `getText()`
 
-Extracts all text from the page as a string.
+Extracts all text from the page. Returns `Promise<string>`.
 
 #### `render(options?)`
 
@@ -127,7 +127,7 @@ interface PageRenderOptions {
 
 #### `getObject(index)`
 
-Returns the page object at the given index. Objects are discriminated by `type`:
+Returns the page object at the given index. Returns `Promise<PageObject>`. Objects are discriminated by `type`:
 
 ```typescript
 type PageObject = TextPageObject | ImagePageObject | OtherPageObject;
@@ -144,7 +144,7 @@ type PageObject = TextPageObject | ImagePageObject | OtherPageObject;
 
 #### `getLinks()`
 
-Returns all links on the page as `Link[]`.
+Returns all links on the page. Returns `Promise<Link[]>`.
 
 ```typescript
 interface Link {
@@ -156,16 +156,16 @@ interface Link {
 
 #### `search(text, options?)`
 
-Searches for text on the page. Returns matches with character positions and bounding rectangles.
+Searches for text on the page. Returns `Promise<SearchMatch[]>` with character positions and bounding rectangles.
 
 ```typescript
-const matches = page.search('invoice', { caseSensitive: true, wholeWord: false });
+const matches = await page.search('invoice', { caseSensitive: true, wholeWord: false });
 // [{ charIndex: 42, length: 7, rects: [{ left, top, right, bottom }] }]
 ```
 
 #### `getAnnotations()`
 
-Returns all annotations on the page as `Annotation[]`.
+Returns all annotations on the page. Returns `Promise<Annotation[]>`.
 
 ```typescript
 interface Annotation {
@@ -206,7 +206,7 @@ This project uses prebuilt PDFium binaries from [bblanchon/pdfium-binaries](http
 
 ## Memory Management
 
-Always call `page.close()` and `doc.destroy()` when done. PDFium allocates native memory that is not tracked by the garbage collector.
+Always call `page.close()` and `doc.destroy()` when done. While GC-triggered destructor hooks exist as a safety net, they should not be relied on — explicit cleanup ensures resources are freed promptly.
 
 ```typescript
 const doc = await loadDocument('file.pdf');

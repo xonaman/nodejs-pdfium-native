@@ -79,7 +79,7 @@ describe('PDFiumDocument.getMetadata', () => {
 describe('PDFiumDocument.getBookmarks', () => {
   it('returns an empty array for a PDF without bookmarks', async () => {
     const doc = await loadDocument(fixture('minimal.pdf'));
-    const bookmarks = doc.getBookmarks();
+    const bookmarks = await doc.getBookmarks();
     expect(Array.isArray(bookmarks)).toBe(true);
     expect(bookmarks.length).toBe(0);
     doc.destroy();
@@ -88,7 +88,7 @@ describe('PDFiumDocument.getBookmarks', () => {
   it('returns bookmarks with titles and page indices', async () => {
     const doc = await loadDocument(fixture('bookmarks.pdf'));
     expect(doc.pageCount).toBe(3);
-    const bookmarks = doc.getBookmarks();
+    const bookmarks = await doc.getBookmarks();
     expect(bookmarks.length).toBe(3);
     expect(bookmarks[0]!.title).toBe('Chapter 1');
     expect(bookmarks[0]!.pageIndex).toBe(0);

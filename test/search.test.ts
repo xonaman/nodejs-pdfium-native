@@ -8,7 +8,7 @@ describe('PDFiumPage.search', () => {
   it('finds text occurrences with positions', async () => {
     const doc = await loadDocument(fixture('text.pdf'));
     const page = await doc.getPage(0);
-    const results = page.search('Hello');
+    const results = await page.search('Hello');
     expect(results.length).toBe(1);
     expect(results[0]!.charIndex).toBeGreaterThanOrEqual(0);
     expect(results[0]!.length).toBe(5);
@@ -25,7 +25,7 @@ describe('PDFiumPage.search', () => {
   it('returns empty for non-matching text', async () => {
     const doc = await loadDocument(fixture('text.pdf'));
     const page = await doc.getPage(0);
-    const results = page.search('xyz-no-match');
+    const results = await page.search('xyz-no-match');
     expect(results.length).toBe(0);
     page.close();
     doc.destroy();
@@ -35,10 +35,10 @@ describe('PDFiumPage.search', () => {
     const doc = await loadDocument(fixture('text.pdf'));
     const page = await doc.getPage(0);
     // case-insensitive (default) should find it
-    const insensitive = page.search('hello');
+    const insensitive = await page.search('hello');
     expect(insensitive.length).toBe(1);
     // case-sensitive should not find lowercase when original is capitalized
-    const sensitive = page.search('hello', { caseSensitive: true });
+    const sensitive = await page.search('hello', { caseSensitive: true });
     expect(sensitive.length).toBe(0);
     page.close();
     doc.destroy();

@@ -132,12 +132,12 @@ export interface NativePage {
   readonly height: number;
   readonly size: PageSize;
   readonly objectCount: number;
-  getText(): string;
+  getText(): Promise<string>;
   render(options?: PageRenderOptions): Promise<Buffer | void>;
-  getObject(index: number): PageObject;
-  getLinks(): Link[];
-  search(text: string, options?: SearchOptions): SearchMatch[];
-  getAnnotations(): Annotation[];
+  getObject(index: number): Promise<PageObject>;
+  getLinks(): Promise<Link[]>;
+  search(text: string, options?: SearchOptions): Promise<SearchMatch[]>;
+  getAnnotations(): Promise<Annotation[]>;
   close(): void;
 }
 
@@ -145,7 +145,7 @@ export interface NativeDocument {
   readonly pageCount: number;
   readonly metadata: DocumentMetadata;
   getPage(index: number): Promise<NativePage>;
-  getBookmarks(): Bookmark[];
+  getBookmarks(): Promise<Bookmark[]>;
   destroy(): void;
 }
 

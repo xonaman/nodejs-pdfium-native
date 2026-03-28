@@ -34,7 +34,7 @@ export class PDFiumDocument {
   }
 
   /** Returns the bookmark/outline tree. */
-  getBookmarks(): Bookmark[] {
+  getBookmarks(): Promise<Bookmark[]> {
     return this.native.getBookmarks();
   }
 }

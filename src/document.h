@@ -62,7 +62,7 @@ private:
   Napi::Value GetPage(const Napi::CallbackInfo &info);
 
   /**
-   * Returns the bookmark tree as a nested array.
+   * Returns the bookmark tree as a nested array (async).
    */
   Napi::Value GetBookmarks(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
@@ -70,82 +70,36 @@ private:
     if (env.IsExceptionPending())
       return env.Null();
 
-    std::lock_guard<std::mutex> lock(g_pdfium_mutex);
-    return BuildBookmarkArray(env, nullptr, 0);
-  }
-
-  Napi::Array BuildBookmarkArray(Napi::Env env, FPDF_BOOKMARK parent,
-                                 int depth) {
-    Napi::Array arr = Napi::Array::New(env);
-    if (depth >= MAX_BOOKMARK_DEPTH)
-      return arr;
-
-    uint32_t idx = 0;
-    FPDF_BOOKMARK child = FPDFBookmark_GetFirstChild(doc_, parent);
-
-    while (child) {
-      Napi::Object obj = Napi::Object::New(env);
-
-      // title
-      unsigned long titleLen = FPDFBookmark_GetTitle(child, nullptr, 0);
-      if (titleLen > 2) {
-        std::vector<unsigned short> titleBuf(titleLen / sizeof(unsigned short));
-        FPDFBookmark_GetTitle(child, titleBuf.data(), titleLen);
-        size_t charCount = titleLen / sizeof(unsigned short) - 1;
-        obj.Set("title",
-                Napi::String::New(
-                    env, reinterpret_cast<const char16_t *>(titleBuf.data()),
-                    charCount));
-      } else {
-        obj.Set("title", Napi::String::New(env, ""));
-      }
-
-      // destination page index
-      FPDF_DEST dest = FPDFBookmark_GetDest(doc_, child);
-      if (dest) {
-        int pageIndex = FPDFDest_GetDestPageIndex(doc_, dest);
-        obj.Set("pageIndex", Napi::Number::New(env, pageIndex));
-      } else {
-        // try action → dest
-        FPDF_ACTION action = FPDFBookmark_GetAction(child);
-        if (action) {
-          FPDF_DEST actionDest = FPDFAction_GetDest(doc_, action);
-          if (actionDest) {
-            int pageIndex = FPDFDest_GetDestPageIndex(doc_, actionDest);
-            obj.Set("pageIndex", Napi::Number::New(env, pageIndex));
-          }
-        }
-      }
-
-      // children (recursive)
-      Napi::Array children = BuildBookmarkArray(env, child, depth + 1);
-      if (children.Length() > 0) {
-        obj.Set("children", children);
-      }
-
-      arr.Set(idx++, obj);
-      child = FPDFBookmark_GetNextSibling(doc_, child);
-    }
-    return arr;
+    auto *worker = new GetBookmarksWorker(env, doc_, docAlive_);
+    auto promise = worker->Promise();
+    worker->Queue();
+    return promise;
   }
 
   /**
    * Closes the document and releases all resources.
    */
   Napi::Value Destroy(const Napi::CallbackInfo &info) {
+    CleanUp();
+    return info.Env().Undefined();
+  }
+
+  /**
+   * GC destructor — releases the document if the user forgot to call
+   * destroy().
+   */
+  void Finalize(Napi::Env /*env*/) override { CleanUp(); }
+
+  void CleanUp() {
     if (doc_) {
-      // invalidate all pages first so they can't use dangling pointers
-      for (auto &flag : pageAliveFlags_) {
+      std::lock_guard<std::mutex> lock(g_pdfium_mutex);
+      for (auto &flag : pageAliveFlags_)
         flag->store(false);
-      }
       pageAliveFlags_.clear();
       docAlive_->store(false);
-
-      std::lock_guard<std::mutex> lock(g_pdfium_mutex);
       FPDF_CloseDocument(doc_);
       doc_ = nullptr;
     }
-    return info.Env().Undefined();
   }
 };
 
@@ -171,6 +125,13 @@ protected:
     // check that the document hasn't been destroyed while we were queued
     if (!docAlive_ || !docAlive_->load()) {
       SetError("Document was destroyed before page load completed");
+      return;
+    }
+
+    // bounds check inside the worker (avoids blocking the main thread)
+    int numPages = FPDF_GetPageCount(doc_);
+    if (pageIndex_ < 0 || pageIndex_ >= numPages) {
+      SetError("Page index out of range");
       return;
     }
 
@@ -222,7 +183,7 @@ private:
   int objectCount_ = 0;
 };
 
-// deferred definition of GetPageAsync (needs GetPageWorker)
+// deferred definition of GetPage (needs GetPageWorker)
 inline Napi::Value PDFiumDocument::GetPage(const Napi::CallbackInfo &info) {
   Napi::Env env = info.Env();
   EnsureOpen(env);
@@ -236,15 +197,6 @@ inline Napi::Value PDFiumDocument::GetPage(const Napi::CallbackInfo &info) {
   }
 
   int pageIndex = info[0].As<Napi::Number>().Int32Value();
-
-  // FPDF_GetPageCount is not thread-safe — acquire mutex
-  std::lock_guard<std::mutex> lock(g_pdfium_mutex);
-  int numPages = FPDF_GetPageCount(doc_);
-  if (pageIndex < 0 || pageIndex >= numPages) {
-    Napi::RangeError::New(env, "Page index out of range")
-        .ThrowAsJavaScriptException();
-    return env.Null();
-  }
 
   auto *worker = new GetPageWorker(env, doc_, pageIndex, this, docAlive_);
   auto promise = worker->Promise();

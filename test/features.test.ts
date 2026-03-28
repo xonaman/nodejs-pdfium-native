@@ -8,7 +8,7 @@ describe('PDFiumPage.getLinks', () => {
   it('returns an empty array for a page with no links', async () => {
     const doc = await loadDocument(fixture('minimal.pdf'));
     const page = await doc.getPage(0);
-    const links = page.getLinks();
+    const links = await page.getLinks();
     expect(Array.isArray(links)).toBe(true);
     expect(links.length).toBe(0);
     page.close();
@@ -18,7 +18,7 @@ describe('PDFiumPage.getLinks', () => {
   it('returns links with URLs and page indices', async () => {
     const doc = await loadDocument(fixture('links.pdf'));
     const page = await doc.getPage(0);
-    const links = page.getLinks();
+    const links = await page.getLinks();
     expect(links.length).toBe(2);
 
     // internal link (to page 2)
@@ -42,7 +42,7 @@ describe('PDFiumPage.getAnnotations', () => {
   it('returns an empty array for a page with no annotations', async () => {
     const doc = await loadDocument(fixture('minimal.pdf'));
     const page = await doc.getPage(0);
-    const annotations = page.getAnnotations();
+    const annotations = await page.getAnnotations();
     expect(Array.isArray(annotations)).toBe(true);
     expect(annotations.length).toBe(0);
     page.close();
@@ -52,7 +52,7 @@ describe('PDFiumPage.getAnnotations', () => {
   it('returns annotations with types, bounds, and contents', async () => {
     const doc = await loadDocument(fixture('annotations.pdf'));
     const page = await doc.getPage(0);
-    const annotations = page.getAnnotations();
+    const annotations = await page.getAnnotations();
     expect(annotations.length).toBe(2);
 
     // text annotation (sticky note)

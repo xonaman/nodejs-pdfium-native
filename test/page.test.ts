@@ -37,8 +37,8 @@ describe('PDFiumPage', () => {
     expect(page.size.height).toBeCloseTo(792, 0);
   });
 
-  it('getText returns a string', () => {
-    const text = page.getText();
+  it('getText returns a string', async () => {
+    const text = await page.getText();
     expect(typeof text).toBe('string');
   });
 
@@ -52,7 +52,7 @@ describe('PDFiumPage', () => {
     const p = await doc2.getPage(0);
     const count = p.objectCount;
     expect(count).toBeGreaterThan(0);
-    const obj = p.getObject(0);
+    const obj = await p.getObject(0);
     expect(obj).toHaveProperty('type');
     expect(obj).toHaveProperty('bounds');
     expect(['text', 'path', 'image', 'shading', 'form', 'unknown']).toContain(obj.type);
@@ -68,7 +68,7 @@ describe('PDFiumPage', () => {
     // find the text object and verify enriched properties
     let foundText = false;
     for (let i = 0; i < count; i++) {
-      const o = p.getObject(i);
+      const o = await p.getObject(i);
       if (o.type === 'text') {
         foundText = true;
         expect(o.text).toBe('Hello');
@@ -110,7 +110,7 @@ describe('page close', () => {
     // width/height are cached — still accessible after close
     expect(page.width).toBeCloseTo(612, 0);
     expect(page.height).toBeCloseTo(792, 0);
-    // native methods throw after close
+    // native methods throw synchronously after close (before async worker is created)
     expect(() => page.getText()).toThrow('Page is closed');
     doc.destroy();
   });
