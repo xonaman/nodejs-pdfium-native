@@ -7,6 +7,8 @@ on:
 jobs:
   prebuild:
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -54,26 +56,25 @@ jobs:
       - name: Create tarball (Unix)
         if: runner.os != 'Windows'
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          tar czf "pdfium-v${VERSION}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz" build/Release/
+          tar czf "pdfium-${{ github.event.release.tag_name }}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz" build/Release/
 
       - name: Create tarball (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $version = (node -p "require('./package.json').version")
-          tar czf "pdfium-v${version}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz" build/Release/
+          tar czf "pdfium-${{ github.event.release.tag_name }}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz" build/Release/
 
       - name: Upload to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          gh release upload "v${VERSION}" pdfium-v*-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz --clobber
+          gh release upload "${{ github.event.release.tag_name }}" pdfium-*-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz --clobber
         shell: bash
 
   prebuild-linux-cross:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -106,12 +107,10 @@ jobs:
 
       - name: Create tarball
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          tar czf "pdfium-v${VERSION}-linux-${{ matrix.arch }}.tar.gz" build/Release/
+          tar czf "pdfium-${{ github.event.release.tag_name }}-linux-${{ matrix.arch }}.tar.gz" build/Release/
 
       - name: Upload to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          gh release upload "v${VERSION}" pdfium-v*-linux-${{ matrix.arch }}.tar.gz --clobber
+          gh release upload "${{ github.event.release.tag_name }}" pdfium-*-linux-${{ matrix.arch }}.tar.gz --clobber
