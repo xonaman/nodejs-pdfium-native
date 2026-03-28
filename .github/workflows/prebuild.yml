@@ -26,12 +26,20 @@ jobs:
           - os: windows-latest
             platform: win32
             arch: x64
+          - os: windows-11-arm
+            platform: win32
+            arch: arm64
+          - os: windows-latest
+            platform: win32
+            arch: ia32
+            node-arch: ia32
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+          architecture: ${{ matrix.node-arch || matrix.arch }}
 
       - name: Install dependencies
         run: npm ci --ignore-scripts
@@ -68,3 +76,52 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           gh release upload "v${VERSION}" pdfium-v*-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz --clobber
         shell: bash
+
+  prebuild-linux-cross:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm
+            docker-platform: linux/arm/v7
+            docker-image: arm32v7/node:22-bookworm
+          - arch: ia32
+            docker-platform: linux/386
+            docker-image: i386/node:22-bookworm
+          - arch: ppc64
+            docker-platform: linux/ppc64le
+            docker-image: ppc64le/node:22-bookworm
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: ${{ matrix.docker-platform }}
+
+      - name: Build in Docker
+        run: |
+          docker run --rm --platform ${{ matrix.docker-platform }} \
+            -v "${{ github.workspace }}:/workspace" \
+            -w /workspace \
+            ${{ matrix.docker-image }} \
+            bash -c "
+              apt-get update && apt-get install -y python3 make g++ &&
+              npm ci --ignore-scripts &&
+              node scripts/download-pdfium.mjs &&
+              npx node-gyp rebuild &&
+              node scripts/bundle-lib.mjs &&
+              npm test
+            "
+
+      - name: Create tarball
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          tar czf "pdfium-v${VERSION}-linux-${{ matrix.arch }}.tar.gz" build/Release/
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          gh release upload "v${VERSION}" pdfium-v*-linux-${{ matrix.arch }}.tar.gz --clobber
