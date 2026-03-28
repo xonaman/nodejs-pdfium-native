@@ -221,3 +221,29 @@ Shared library linking:
 **Rebuild after TS changes**: `npm run build:ts`
 
 **Run single test**: `npx vitest run -t "test name"`
+
+---
+
+## Changelog Maintenance
+
+For medium to major changes, update `CHANGELOG.md` before committing. The changelog follows [Keep a Changelog](https://keepachangelog.com/) format with sections: Added, Changed, Fixed, Removed, Deprecated, Security.
+
+```markdown
+## [X.Y.Z] - YYYY-MM-DD
+
+### Changed
+
+- Description of breaking or notable change
+
+### Added
+
+- Description of new feature
+```
+
+Guidelines:
+
+- **Always update** for: new features, breaking changes, bug fixes, removed functionality, security fixes
+- **Skip** for: CI-only tweaks, formatting, internal refactors with no API change, dependency bumps
+- Use imperative mood ("Add", "Fix", "Remove", not "Added", "Fixes", "Removed") within entries — but use past tense for section headers per Keep a Changelog convention
+- Mark breaking changes prominently (e.g., prefix with **BREAKING**)
+- Reference the method/class affected so users can grep for impact

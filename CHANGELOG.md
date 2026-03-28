@@ -4,6 +4,74 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-03-28
+
+### Changed
+
+- **BREAKING**: `getText()`, `getObject()`, `getLinks()`, `search()`, `getAnnotations()`, and `getBookmarks()` now return Promises instead of synchronous values
+- `objects()` generator is now an async generator (`AsyncGenerator<PageObject>`)
+- GetPage bounds check moved off the main thread into the async worker
+- Alive flags in `destroy()`/`close()` are now set under the global mutex
+
+### Added
+
+- GC Finalize callbacks on `PDFiumPage` and `PDFiumDocument` as safety net for unreleased resources
+- `FPDF_DestroyLibrary` cleanup hook on environment teardown
+- `page_workers.h` with dedicated AsyncWorker classes for all page/document operations
+
+### Fixed
+
+- SSRF vulnerability in install script (CodeQL critical)
+- Missing `permissions: contents: read` in CI/release workflow jobs (CodeQL medium)
+
+### Removed
+
+- `ia32` platform support (macOS, Linux musl, Windows)
+
+## [0.1.7] - 2026-03-28
+
+### Fixed
+
+- MSVC ARM64 build: compile `stb_image_write` as C++ to fix const initializer error
+
+## [0.1.6] - 2026-03-28
+
+### Fixed
+
+- Windows prebuild: use bash shell for tarball creation
+
+## [0.1.5] - 2026-03-28
+
+### Changed
+
+- Merged publish and prebuild into single `release.yml` workflow
+
+## [0.1.4] - 2026-03-28
+
+### Changed
+
+- Release triggered by tag push (`v*`) instead of GitHub release event
+- Auto-create GitHub release with prebuilt tarballs
+
+## [0.1.3] - 2026-03-28
+
+### Fixed
+
+- npm publish authentication with OIDC trusted publishing (Node 24 / npm 11.5.1+)
+
+## [0.1.2] - 2026-03-28
+
+### Fixed
+
+- Prebuild tarball naming and `contents: write` permission for release uploads
+
+## [0.1.1] - 2026-03-28
+
+### Fixed
+
+- Prebuild workflow failures
+- Added `@types/node` dev dependency
+
 ## [0.1.0] - 2026-03-27
 
 ### Added
