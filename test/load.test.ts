@@ -7,7 +7,7 @@ import {
   PDFiumError,
   PDFiumFileError,
   PDFiumFormatError,
-} from '../index.js';
+} from '../lib/index.js';
 import { pdfBuffer } from './fixtures.js';
 
 const tmpFilePath = resolve(import.meta.dirname!, 'test-fixture.pdf');

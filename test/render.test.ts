@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { loadDocument, PDFiumDocument } from '../index.js';
+import { loadDocument, PDFiumDocument } from '../lib/index.js';
 import { pdfBuffer } from './fixtures.js';
 
 describe('PDFiumPage.render', () => {

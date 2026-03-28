@@ -64,7 +64,7 @@ export const pdfBuffer = Buffer.from(MINIMAL_PDF);
 export const twoPagesBuffer = Buffer.from(TWO_PAGE_PDF);
 export const textPdfBuffer = Buffer.from(TEXT_PDF);
 
-export const fixturesDir = resolve(__dirname, '..', '..', 'test', 'fixtures');
+export const fixturesDir = resolve(__dirname, 'fixtures');
 
 export function fixturePath(name: string): string {
   return resolve(fixturesDir, name);

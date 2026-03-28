@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { loadDocument, PDFiumDocument, PDFiumPage } from '../index.js';
+import { loadDocument, PDFiumDocument, PDFiumPage } from '../lib/index.js';
 import { pdfBuffer, textPdfBuffer, twoPagesBuffer } from './fixtures.js';
 
 describe('PDFiumPage', () => {

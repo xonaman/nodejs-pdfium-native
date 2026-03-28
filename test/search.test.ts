@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadDocument } from '../index.js';
+import { loadDocument } from '../lib/index.js';
 import { textPdfBuffer } from './fixtures.js';
 
 describe('PDFiumPage.search', () => {
