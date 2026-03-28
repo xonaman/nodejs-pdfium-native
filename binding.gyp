@@ -39,8 +39,12 @@
               "CLANG_CXX_LANGUAGE_STANDARD": "c++17",
               "GCC_SYMBOLS_PRIVATE_EXTERN": "YES",
               "DEAD_CODE_STRIPPING": "YES",
-              "GCC_OPTIMIZATION_LEVEL": "s",
               "LLVM_LTO": "YES",
+              "OTHER_CPLUSPLUSFLAGS": [
+                "-Os",
+                "-ffunction-sections",
+                "-fdata-sections"
+              ],
               "OTHER_LDFLAGS": [
                 "-L<(module_root_dir)/deps/pdfium/lib",
                 "-lpdfium",

@@ -45,7 +45,6 @@ jobs:
           - os: macos-latest
             platform: darwin
             arch: x64
-            cross: true
           - os: windows-latest
             platform: win32
             arch: x64
@@ -122,6 +121,7 @@ jobs:
           platforms: ${{ matrix.docker-platform }}
 
       - name: Build in Docker
+        timeout-minutes: 60
         run: |
           docker run --rm --platform ${{ matrix.docker-platform }} \
             -v "${{ github.workspace }}:/workspace" \
