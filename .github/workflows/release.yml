@@ -1,14 +1,33 @@
-name: Prebuild Binaries
+name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*'
 
 jobs:
-  prebuild:
+  test:
     runs-on: ${{ matrix.os }}
-    permissions:
-      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node-version: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run lint:check
+      - run: npm test
+
+  prebuild:
+    needs: test
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -55,26 +74,22 @@ jobs:
 
       - name: Create tarball (Unix)
         if: runner.os != 'Windows'
-        run: |
-          tar czf "pdfium-${{ github.event.release.tag_name }}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz" build/Release/
+        run: tar czf "pdfium-${{ github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz" build/Release/
 
       - name: Create tarball (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: |
-          tar czf "pdfium-${{ github.event.release.tag_name }}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz" build/Release/
+        run: tar czf "pdfium-${{ github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz" build/Release/
 
-      - name: Upload to release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload "${{ github.event.release.tag_name }}" pdfium-*-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz --clobber
-        shell: bash
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebuild-${{ matrix.platform }}-${{ matrix.arch }}
+          path: pdfium-*.tar.gz
 
   prebuild-linux-cross:
+    needs: test
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -106,11 +121,42 @@ jobs:
             "
 
       - name: Create tarball
-        run: |
-          tar czf "pdfium-${{ github.event.release.tag_name }}-linux-${{ matrix.arch }}.tar.gz" build/Release/
+        run: tar czf "pdfium-${{ github.ref_name }}-linux-${{ matrix.arch }}.tar.gz" build/Release/
 
-      - name: Upload to release
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebuild-linux-${{ matrix.arch }}
+          path: pdfium-*.tar.gz
+
+  release:
+    needs: [prebuild, prebuild-linux-cross]
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci --ignore-scripts
+
+      - name: Publish to npm
+        run: npm publish
+
+      - name: Download all prebuild artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: prebuild-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload "${{ github.event.release.tag_name }}" pdfium-*-linux-${{ matrix.arch }}.tar.gz --clobber
+        run: gh release create "${{ github.ref_name }}" artifacts/*.tar.gz --generate-notes
