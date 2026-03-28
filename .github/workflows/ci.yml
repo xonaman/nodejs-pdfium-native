@@ -23,7 +23,11 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: npm run format:check
       - run: npm run lint:check
+
+      - name: Test install script (source fallback)
+        run: node scripts/install.mjs
+
       - run: npm test
