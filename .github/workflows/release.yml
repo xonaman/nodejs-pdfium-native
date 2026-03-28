@@ -72,13 +72,8 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Create tarball (Unix)
-        if: runner.os != 'Windows'
-        run: tar czf "pdfium-${{ github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz" build/Release/
-
-      - name: Create tarball (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
+      - name: Create tarball
+        shell: bash
         run: tar czf "pdfium-${{ github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz" build/Release/
 
       - name: Upload artifact
