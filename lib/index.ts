@@ -54,7 +54,6 @@ export type {
   OtherPageObject,
   PageObject,
   PageObjectBounds,
-  PageObjectType,
   PageRenderOptions,
   RGBA,
   SearchMatch,
