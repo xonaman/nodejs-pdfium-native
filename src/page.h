@@ -8,7 +8,6 @@
 #include "search_worker.h"
 #include "text_worker.h"
 
-#include <algorithm>
 #include <atomic>
 #include <memory>
 #include <string>

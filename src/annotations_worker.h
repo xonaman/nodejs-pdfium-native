@@ -202,8 +202,8 @@ protected:
       // annotation flags
       data.flags = FPDFAnnot_GetFlags(annot);
 
-      annotations_.push_back(std::move(data));
       FPDFPage_CloseAnnot(annot);
+      annotations_.push_back(std::move(data));
     }
   }
 

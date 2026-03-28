@@ -75,6 +75,10 @@ protected:
     if (useFile_) {
       doc_ = FPDF_LoadDocument(filePath_.c_str(), pw);
     } else {
+      if (bufferData_.size() > static_cast<size_t>(INT_MAX)) {
+        SetError("FORMAT:Buffer too large");
+        return;
+      }
       doc_ = FPDF_LoadMemDocument(bufferData_.data(),
                                   static_cast<int>(bufferData_.size()), pw);
     }

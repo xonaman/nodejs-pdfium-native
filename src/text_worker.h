@@ -35,8 +35,8 @@ protected:
     }
 
     int charCount = FPDFText_CountChars(textPage);
-    if (charCount > 0) {
-      int bufLen = charCount + 1;
+    if (charCount > 0 && charCount < INT_MAX) {
+      size_t bufLen = static_cast<size_t>(charCount) + 1;
       textBuf_.resize(bufLen);
       FPDFText_GetText(textPage, 0, charCount, textBuf_.data());
       textLen_ = charCount;

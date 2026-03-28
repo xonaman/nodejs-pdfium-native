@@ -41,7 +41,7 @@ constexpr int MAX_BOOKMARK_DEPTH = 64;
 template <typename GetLen, typename GetData>
 inline std::u16string ReadU16(GetLen getLen, GetData getData) {
   unsigned long len = getLen(static_cast<FPDF_WCHAR *>(nullptr), 0);
-  if (len <= 2)
+  if (len < 4 || len % 2 != 0)
     return {};
   std::vector<unsigned short> buf(len / sizeof(unsigned short));
   getData(reinterpret_cast<FPDF_WCHAR *>(buf.data()), len);

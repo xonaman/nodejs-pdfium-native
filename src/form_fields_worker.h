@@ -54,6 +54,7 @@ protected:
     FPDF_FORMHANDLE formHandle =
         FPDFDOC_InitFormFillEnvironment(doc_, &formFillInfo);
     if (!formHandle) {
+      SetError("Failed to initialize form fill environment");
       return;
     }
 
@@ -191,11 +192,12 @@ protected:
         }
       }
 
-      fields_.push_back(std::move(data));
       FPDFPage_CloseAnnot(annot);
+      fields_.push_back(std::move(data));
     }
 
-    FPDFDOC_ExitFormFillEnvironment(formHandle);
+    if (formHandle)
+      FPDFDOC_ExitFormFillEnvironment(formHandle);
   }
 
   void OnOK() override {

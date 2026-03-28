@@ -56,13 +56,18 @@ private:
   std::shared_ptr<std::atomic<bool>> docAlive_;
   std::vector<BookmarkData> bookmarks_;
 
+  // maximum siblings per level to prevent DoS from malicious PDFs
+  static constexpr int MAX_SIBLINGS_PER_LEVEL = 10000;
+
   void CollectBookmarks(FPDF_BOOKMARK parent, std::vector<BookmarkData> &out,
                         int depth) {
     if (depth >= MAX_BOOKMARK_DEPTH)
       return;
 
+    int siblingCount = 0;
     FPDF_BOOKMARK child = FPDFBookmark_GetFirstChild(doc_, parent);
-    while (child) {
+    while (child && siblingCount < MAX_SIBLINGS_PER_LEVEL) {
+      siblingCount++;
       BookmarkData data;
 
       data.title = ReadU16(

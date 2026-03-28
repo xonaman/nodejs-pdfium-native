@@ -11,6 +11,8 @@
 
 // stb write callback — appends bytes to a std::vector
 inline void stb_write_callback(void *context, void *data, int size) {
+  if (size <= 0)
+    return;
   auto *out = static_cast<std::vector<uint8_t> *>(context);
   auto *bytes = static_cast<uint8_t *>(data);
   out->insert(out->end(), bytes, bytes + size);
@@ -63,8 +65,13 @@ protected:
     // convert BGRA → RGB or BGRA → RGBA for stb
     void *bufferData = FPDFBitmap_GetBuffer(bitmap);
     int stride = FPDFBitmap_GetStride(bitmap);
+    if (!bufferData || stride < renderWidth_ * 4) {
+      FPDFBitmap_Destroy(bitmap);
+      SetError("Failed to get bitmap buffer");
+      return;
+    }
     std::vector<uint8_t> pixels(static_cast<size_t>(renderWidth_) *
-                                renderHeight_ * channels);
+                                static_cast<size_t>(renderHeight_) * channels);
 
     for (int y = 0; y < renderHeight_; y++) {
       auto *row = static_cast<uint8_t *>(bufferData) + y * stride;

@@ -41,8 +41,10 @@ protected:
     CHECK_ALIVE();
 
     FPDF_TEXTPAGE textPage = FPDFText_LoadPage(page_);
-    if (!textPage)
+    if (!textPage) {
+      SetError("Failed to load text page");
       return;
+    }
 
     FPDF_SCHHANDLE handle = FPDFText_FindStart(
         textPage, reinterpret_cast<const unsigned short *>(needle_.c_str()),
@@ -55,14 +57,16 @@ protected:
         match.length = FPDFText_GetSchCount(handle);
 
         // extract the matched text
-        int textBufLen = match.length + 1;
-        std::vector<unsigned short> textBuf(textBufLen);
-        int got = FPDFText_GetText(textPage, match.charIndex, match.length,
-                                   textBuf.data());
-        if (got > 0) {
-          match.matchedText =
-              std::u16string(reinterpret_cast<const char16_t *>(textBuf.data()),
-                             static_cast<size_t>(got - 1));
+        if (match.length > 0 && match.length < INT_MAX) {
+          size_t textBufLen = static_cast<size_t>(match.length) + 1;
+          std::vector<unsigned short> textBuf(textBufLen);
+          int got = FPDFText_GetText(textPage, match.charIndex, match.length,
+                                     textBuf.data());
+          if (got > 0) {
+            match.matchedText = std::u16string(
+                reinterpret_cast<const char16_t *>(textBuf.data()),
+                static_cast<size_t>(got - 1));
+          }
         }
 
         int numRects =
