@@ -198,6 +198,12 @@ interface DocumentMetadata {
 }
 ```
 
+---
+
+## Acknowledgements
+
+This project uses prebuilt PDFium binaries from [bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries), which provides automated builds of the PDFium library for multiple platforms. Thanks to [@bblanchon](https://github.com/bblanchon) for maintaining this invaluable resource.
+
 ## Memory Management
 
 Always call `page.close()` and `doc.destroy()` when done. PDFium allocates native memory that is not tracked by the garbage collector.
