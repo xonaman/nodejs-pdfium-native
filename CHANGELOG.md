@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.3] - 2026-03-28
+
+### Added
+
+- `getFormFields()` for reading PDF form fields (text fields, checkboxes, radio buttons, combo boxes, list boxes, signatures)
+- Bookmark sibling count limit (`MAX_SIBLINGS_PER_LEVEL = 10000`) to prevent DoS from malicious PDFs
+
+### Changed
+
+- Extracted shared UTF-16 read/write helpers (`ReadU16`, `SetU16`, `SetU16IfPresent`, `ToNapiString`, `ActionTypeString`) to `napi_helpers.h`, reducing boilerplate across all workers
+- Split monolithic `page_workers.h` (1500 lines) into 7 individual worker files
+- Moved `CHECK_ALIVE` macro to `napi_helpers.h`
+
+### Fixed
+
+- `ReadU16` now rejects odd byte lengths to prevent buffer overflow on malformed PDFs
+- `SearchWorker` and `GetFormFieldsWorker` now properly reject (instead of silently resolving empty) when PDFium fails to load text page or initialize form environment
+- Form fill environment cleanup is now guarded against null handle
+- Render worker validates bitmap buffer and stride before pixel conversion
+- Render worker pixel buffer allocation casts both dimensions to `size_t` to prevent integer overflow
+- `stb_write_callback` guards against negative size parameter
+- `LoadDocumentWorker` rejects buffers larger than `INT_MAX`
+- Annotation handles are now closed before `push_back` to prevent resource leaks on allocation failure
+- Text and search workers guard against `INT_MAX` overflow in buffer sizing
+- Removed unused `#include <algorithm>` from `page.h`
+
 ## [0.2.2] - 2026-03-28
 
 ### Changed

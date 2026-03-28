@@ -1,5 +1,7 @@
 #include "document.h"
 
+#include <climits>
+
 #include "fpdf_attachment.h"
 #include "fpdf_catalog.h"
 #include "fpdf_signature.h"

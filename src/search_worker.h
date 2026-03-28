@@ -3,6 +3,7 @@
 #include "napi_helpers.h"
 
 #include <atomic>
+#include <climits>
 #include <memory>
 #include <string>
 #include <vector>

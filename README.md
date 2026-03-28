@@ -52,20 +52,20 @@ doc.destroy();
 
 ### 📊 How it compares
 
-|                     | **pdfium-native**       | @hyzyla/pdfium            | pdfjs-dist        | pdf-parse      | pdf2json            |
-| ------------------- | ----------------------- | ------------------------- | ----------------- | -------------- | ------------------- |
-| Engine              | PDFium (C++ addon)      | PDFium (WASM)             | pdf.js (JS)       | pdf.js (JS)    | pdf.js fork (JS)    |
-| Rendering           | ✅ JPEG/PNG built-in    | ⚠️ Raw bitmap (BYO sharp) | ⚠️ Canvas/browser | ❌             | ❌                  |
-| Text extraction     | ✅                      | ❌                        | ✅                | ✅             | ✅ (structured)     |
-| Search (with rects) | ✅                      | ❌                        | ⚠️ Manual         | ❌             | ❌                  |
-| Annotations         | ✅                      | ❌                        | ⚠️ Partial        | ❌             | ❌                  |
-| Bookmarks           | ✅                      | ❌                        | ✅                | ❌             | ❌                  |
-| Links               | ✅                      | ❌                        | ✅                | ❌             | ❌                  |
-| Form fields         | ✅                      | ❌                        | ✅                | ❌             | ✅                  |
-| Async I/O           | ✅ libuv workers        | ❌ Sync (WASM)            | ❌ Main thread    | ❌ Main thread | ⚠️ Events / streams |
-| Environment         | Node.js                 | Node.js + browser         | Node.js + browser | Node.js        | Node.js             |
-| Dependencies        | None¹                   | None (WASM bundled)       | None              | pdf.js         | None (since v3)     |
-| Platforms           | macOS / Linux / Windows | Any (WASM)                | Any               | Any            | Any                 |
+|                     | **pdfium-native**       | @hyzyla/pdfium            | pdfjs-dist        |
+| ------------------- | ----------------------- | ------------------------- | ----------------- |
+| Engine              | PDFium (C++ addon)      | PDFium (WASM)             | pdf.js (JS)       |
+| Rendering           | ✅ JPEG/PNG built-in    | ⚠️ Raw bitmap (BYO sharp) | ⚠️ Canvas/browser |
+| Text extraction     | ✅                      | ❌                        | ✅                |
+| Search (with rects) | ✅                      | ❌                        | ⚠️ Manual         |
+| Annotations         | ✅                      | ❌                        | ⚠️ Partial        |
+| Bookmarks           | ✅                      | ❌                        | ✅                |
+| Links               | ✅                      | ❌                        | ✅                |
+| Form fields         | ✅                      | ❌                        | ✅                |
+| Async I/O           | ✅ libuv workers        | ❌ Sync (WASM)            | ❌ Main thread    |
+| Environment         | Node.js                 | Node.js + browser         | Node.js + browser |
+| Dependencies        | None¹                   | None (WASM bundled)       | None              |
+| Platforms           | macOS / Linux / Windows | Any (WASM)                | Any               |
 
 ¹ Prebuilt binaries downloaded at install — no runtime dependencies. Falls back to source compilation if unavailable.
 
