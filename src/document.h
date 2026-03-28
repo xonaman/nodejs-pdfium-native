@@ -15,7 +15,7 @@ public:
     return DefineClass(
         env, "PDFiumDocument",
         {
-            InstanceMethod<&PDFiumDocument::GetPageAsync>("getPage"),
+            InstanceMethod<&PDFiumDocument::GetPage>("getPage"),
             InstanceMethod<&PDFiumDocument::GetBookmarks>("getBookmarks"),
             InstanceMethod<&PDFiumDocument::Destroy>("destroy"),
         });
@@ -59,7 +59,7 @@ private:
   /**
    * Gets a page by 0-based index (async). Returns a Promise<PDFiumPage>.
    */
-  Napi::Value GetPageAsync(const Napi::CallbackInfo &info);
+  Napi::Value GetPage(const Napi::CallbackInfo &info);
 
   /**
    * Returns the bookmark tree as a nested array.
@@ -223,8 +223,7 @@ private:
 };
 
 // deferred definition of GetPageAsync (needs GetPageWorker)
-inline Napi::Value
-PDFiumDocument::GetPageAsync(const Napi::CallbackInfo &info) {
+inline Napi::Value PDFiumDocument::GetPage(const Napi::CallbackInfo &info) {
   Napi::Env env = info.Env();
   EnsureOpen(env);
   if (env.IsExceptionPending())

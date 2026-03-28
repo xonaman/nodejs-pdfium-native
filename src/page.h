@@ -28,7 +28,7 @@ public:
         {
             InstanceAccessor<&PDFiumPage::GetNumber>("number"),
             InstanceMethod<&PDFiumPage::GetText>("getText"),
-            InstanceMethod<&PDFiumPage::RenderAsync>("render"),
+            InstanceMethod<&PDFiumPage::Render>("render"),
             InstanceMethod<&PDFiumPage::GetObject>("getObject"),
             InstanceMethod<&PDFiumPage::GetLinks>("getLinks"),
             InstanceMethod<&PDFiumPage::Search>("search"),
@@ -118,7 +118,7 @@ private:
   /**
    * Renders the page to a JPEG or PNG buffer (async).
    */
-  Napi::Value RenderAsync(const Napi::CallbackInfo &info) {
+  Napi::Value Render(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
     EnsureOpen(env);
     if (env.IsExceptionPending())
