@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-03-28
+
+### Changed
+
+- Cross-compile `darwin-x64` on `macos-latest` (arm64) and `win32-arm64` on `windows-latest` (x64), eliminating dedicated runners
+- Moved `linux-arm64` prebuild from native `ubuntu-24.04-arm` runner to QEMU Docker cross-compile
+- Added `linux-musl-x64` and `linux-musl-arm64` prebuilds via Alpine Docker
+
+### Fixed
+
+- `install.mjs` now detects musl libc and downloads the correct prebuilt tarball on Alpine/musl systems
+- Cache page dimensions in C++ to avoid reading them without mutex in `Render()`
+- `g_initialized` is now `std::atomic<bool>` for thread safety
+- Consistent alive flag ordering in `PDFiumPage::CleanUp()` (set under mutex, matching `PDFiumDocument`)
+
+### Performance
+
+- Binary size reduced ~37% via LTO, `-Os`, `-fvisibility=hidden`, dead code stripping, and link-time symbol stripping
+
 ## [0.2.0] - 2026-03-28
 
 ### Changed

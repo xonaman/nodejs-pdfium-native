@@ -228,6 +228,20 @@ Shared library linking:
 
 For medium to major changes, update `CHANGELOG.md` before committing. The changelog follows [Keep a Changelog](https://keepachangelog.com/) format with sections: Added, Changed, Fixed, Removed, Deprecated, Security.
 
+### Version Bumping
+
+**Always use `npm version`** to bump the version. This updates both `package.json` and `package-lock.json` atomically. Never edit the version in `package.json` manually.
+
+```bash
+npm version patch   # 0.2.1 → 0.2.2
+npm version minor   # 0.2.1 → 0.3.0
+npm version major   # 0.2.1 → 1.0.0
+npm version 0.3.0   # explicit version
+
+# Use --no-git-tag-version to skip the automatic git tag + commit
+npm version patch --no-git-tag-version
+```
+
 ```markdown
 ## [X.Y.Z] - YYYY-MM-DD
 
