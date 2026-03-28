@@ -5,6 +5,8 @@
 #include <atomic>
 #include <memory>
 
+#include "fpdf_transformpage.h"
+
 // ---------------------------------------------------------------------------
 // PDFiumDocument
 // ---------------------------------------------------------------------------
@@ -143,6 +145,35 @@ protected:
     width_ = FPDF_GetPageWidthF(page_);
     height_ = FPDF_GetPageHeightF(page_);
     objectCount_ = FPDFPage_CountObjects(page_);
+    rotation_ = FPDFPage_GetRotation(page_);
+    hasTransparency_ = FPDFPage_HasTransparency(page_) != 0;
+
+    // page label (UTF-16LE)
+    unsigned long labelLen = FPDF_GetPageLabel(doc_, pageIndex_, nullptr, 0);
+    if (labelLen > 2) {
+      std::vector<unsigned short> labelBuf(labelLen / sizeof(unsigned short));
+      FPDF_GetPageLabel(doc_, pageIndex_, labelBuf.data(), labelLen);
+      size_t charCount = labelLen / sizeof(unsigned short) - 1;
+      label_ = std::u16string(
+          reinterpret_cast<const char16_t *>(labelBuf.data()), charCount);
+    }
+
+    // optional page boxes
+    float l, b, r, t;
+    if (FPDFPage_GetCropBox(page_, &l, &b, &r, &t)) {
+      hasCropBox_ = true;
+      cropLeft_ = l;
+      cropBottom_ = b;
+      cropRight_ = r;
+      cropTop_ = t;
+    }
+    if (FPDFPage_GetTrimBox(page_, &l, &b, &r, &t)) {
+      hasTrimBox_ = true;
+      trimLeft_ = l;
+      trimBottom_ = b;
+      trimRight_ = r;
+      trimTop_ = t;
+    }
   }
 
   void OnOK() override {
@@ -159,6 +190,19 @@ protected:
     pageObj.Set("width", Napi::Number::New(env, width_));
     pageObj.Set("height", Napi::Number::New(env, height_));
     pageObj.Set("objectCount", Napi::Number::New(env, objectCount_));
+    pageObj.Set("rotation", Napi::Number::New(env, rotation_));
+    pageObj.Set("hasTransparency", Napi::Boolean::New(env, hasTransparency_));
+    if (!label_.empty())
+      pageObj.Set("label",
+                  Napi::String::New(
+                      env, reinterpret_cast<const char16_t *>(label_.data()),
+                      label_.size()));
+    if (hasCropBox_)
+      pageObj.Set("cropBox", CreateBoundsObject(env, cropLeft_, cropBottom_,
+                                                cropRight_, cropTop_));
+    if (hasTrimBox_)
+      pageObj.Set("trimBox", CreateBoundsObject(env, trimLeft_, trimBottom_,
+                                                trimRight_, trimTop_));
 
     deferred_.Resolve(pageObj);
   }
@@ -177,6 +221,13 @@ private:
   float width_ = 0;
   float height_ = 0;
   int objectCount_ = 0;
+  int rotation_ = 0;
+  bool hasTransparency_ = false;
+  std::u16string label_;
+  bool hasCropBox_ = false;
+  float cropLeft_ = 0, cropBottom_ = 0, cropRight_ = 0, cropTop_ = 0;
+  bool hasTrimBox_ = false;
+  float trimLeft_ = 0, trimBottom_ = 0, trimRight_ = 0, trimTop_ = 0;
 };
 
 // deferred definition of GetPage (needs GetPageWorker)

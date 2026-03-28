@@ -1,5 +1,9 @@
 #include "document.h"
 
+#include "fpdf_attachment.h"
+#include "fpdf_catalog.h"
+#include "fpdf_signature.h"
+
 Napi::FunctionReference PDFiumDocument::pageConstructor;
 
 // ---------------------------------------------------------------------------
@@ -97,6 +101,45 @@ protected:
     }
     FPDF_GetFileVersion(doc_, &pdfVersion_);
     permissions_ = FPDF_GetDocPermissions(doc_);
+
+    // tagged PDF flag
+    isTagged_ = FPDFCatalog_IsTagged(doc_) != 0;
+
+    // document language (UTF-16LE encoded)
+    unsigned long langLen = FPDFCatalog_GetLanguage(doc_, nullptr, 0);
+    if (langLen > 2) {
+      std::vector<unsigned short> langBuf(langLen / sizeof(unsigned short));
+      FPDFCatalog_GetLanguage(
+          doc_, reinterpret_cast<FPDF_WCHAR *>(langBuf.data()), langLen);
+      size_t charCount = langLen / sizeof(unsigned short) - 1;
+      language_ = std::u16string(
+          reinterpret_cast<const char16_t *>(langBuf.data()), charCount);
+    }
+
+    // signature and attachment counts
+    signatureCount_ = FPDF_GetSignatureCount(doc_);
+    attachmentCount_ = FPDFDoc_GetAttachmentCount(doc_);
+
+    // file identifiers (raw byte strings → hex)
+    auto readFileId = [&](FPDF_FILEIDTYPE idType) -> std::string {
+      unsigned long len = FPDF_GetFileIdentifier(doc_, idType, nullptr, 0);
+      if (len <= 1)
+        return "";
+      std::vector<char> buf(len);
+      FPDF_GetFileIdentifier(doc_, idType, buf.data(), len);
+      // convert raw bytes to hex string
+      static const char hex[] = "0123456789abcdef";
+      std::string result;
+      result.reserve((len - 1) * 2);
+      for (unsigned long j = 0; j < len - 1; j++) {
+        unsigned char c = static_cast<unsigned char>(buf[j]);
+        result.push_back(hex[c >> 4]);
+        result.push_back(hex[c & 0x0F]);
+      }
+      return result;
+    };
+    permanentId_ = readFileId(FILEIDTYPE_PERMANENT);
+    changingId_ = readFileId(FILEIDTYPE_CHANGING);
   }
 
   void OnOK() override {
@@ -143,6 +186,23 @@ protected:
     permObj.Set("printHighQuality",
                 Napi::Boolean::New(env, (permissions_ & (1 << 11)) != 0));
     metaObj.Set("permissions", permObj);
+
+    metaObj.Set("isTagged", Napi::Boolean::New(env, isTagged_));
+    if (language_.empty()) {
+      metaObj.Set("language", Napi::String::New(env, ""));
+    } else {
+      metaObj.Set("language",
+                  Napi::String::New(
+                      env, reinterpret_cast<const char16_t *>(language_.data()),
+                      language_.size()));
+    }
+    metaObj.Set("signatureCount", Napi::Number::New(env, signatureCount_));
+    metaObj.Set("attachmentCount", Napi::Number::New(env, attachmentCount_));
+    if (!permanentId_.empty())
+      metaObj.Set("permanentId", Napi::String::New(env, permanentId_));
+    if (!changingId_.empty())
+      metaObj.Set("changingId", Napi::String::New(env, changingId_));
+
     docObj.Set("metadata", metaObj);
 
     // for buffer variant, transfer ownership of the copied data
@@ -169,6 +229,12 @@ private:
   std::u16string meta_[8];
   int pdfVersion_ = 0;
   unsigned long permissions_ = 0xFFFFFFFF;
+  bool isTagged_ = false;
+  std::u16string language_;
+  int signatureCount_ = 0;
+  int attachmentCount_ = 0;
+  std::string permanentId_;
+  std::string changingId_;
 };
 
 /**

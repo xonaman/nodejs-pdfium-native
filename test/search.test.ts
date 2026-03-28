@@ -18,6 +18,8 @@ describe('PDFiumPage.search', () => {
     expect(results[0]!.rects[0]).toHaveProperty('top');
     expect(results[0]!.rects[0]).toHaveProperty('right');
     expect(results[0]!.rects[0]).toHaveProperty('bottom');
+    // enriched: matchedText
+    expect(results[0]!.matchedText).toBe('Hello');
     page.close();
     doc.destroy();
   });

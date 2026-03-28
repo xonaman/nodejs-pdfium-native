@@ -40,6 +40,43 @@ describe('PDFiumPage', () => {
     expect(page.objectCount).toBeGreaterThanOrEqual(0);
   });
 
+  it('has rotation and hasTransparency properties', () => {
+    expect(typeof page.rotation).toBe('number');
+    expect([0, 1, 2, 3]).toContain(page.rotation);
+    expect(typeof page.hasTransparency).toBe('boolean');
+  });
+
+  it('returns rotation=1 for a 90° rotated page', async () => {
+    const doc2 = await loadDocument(fixture('rotated-page.pdf'));
+    const p = await doc2.getPage(0);
+    expect(p.rotation).toBe(1);
+    p.close();
+    doc2.destroy();
+  });
+
+  it('returns cropBox and trimBox when set', async () => {
+    const doc2 = await loadDocument(fixture('page-boxes.pdf'));
+    const p = await doc2.getPage(0);
+    expect(p.cropBox).toBeDefined();
+    expect(p.cropBox!.left).toBeCloseTo(50, 0);
+    expect(p.cropBox!.bottom).toBeCloseTo(50, 0);
+    expect(p.cropBox!.right).toBeCloseTo(562, 0);
+    expect(p.cropBox!.top).toBeCloseTo(742, 0);
+    expect(p.trimBox).toBeDefined();
+    expect(p.trimBox!.left).toBeCloseTo(72, 0);
+    expect(p.trimBox!.bottom).toBeCloseTo(72, 0);
+    expect(p.trimBox!.right).toBeCloseTo(540, 0);
+    expect(p.trimBox!.top).toBeCloseTo(720, 0);
+    p.close();
+    doc2.destroy();
+  });
+
+  it('returns undefined cropBox/trimBox when not set', () => {
+    // minimal.pdf has no explicit CropBox or TrimBox
+    expect(page.cropBox).toBeUndefined();
+    expect(page.trimBox).toBeUndefined();
+  });
+
   it('getObject returns type and bounds', async () => {
     const doc2 = await loadDocument(fixture('text.pdf'));
     const p = await doc2.getPage(0);
@@ -69,11 +106,41 @@ describe('PDFiumPage', () => {
         expect(o.fontName).toBe('Helvetica');
         expect(typeof o.fontWeight).toBe('number');
         expect(typeof o.italicAngle).toBe('number');
+        // enriched text object properties
+        expect(typeof o.renderMode).toBe('string');
+        expect(typeof o.isEmbedded).toBe('boolean');
+        if (o.fontFlags !== undefined) expect(typeof o.fontFlags).toBe('number');
         break;
       }
     }
     expect(foundText).toBe(true);
 
+    p.close();
+    doc2.destroy();
+  });
+
+  it('returns image object enrichments (DPI, colorspace, filters)', async () => {
+    const doc2 = await loadDocument(fixture('image.pdf'));
+    const p = await doc2.getPage(0);
+    let foundImage = false;
+    for (let i = 0; i < p.objectCount; i++) {
+      const o = await p.getObject(i);
+      if (o.type === 'image') {
+        foundImage = true;
+        expect(o.imageWidth).toBeGreaterThan(0);
+        expect(o.imageHeight).toBeGreaterThan(0);
+        if (o.horizontalDpi !== undefined) expect(o.horizontalDpi).toBeGreaterThan(0);
+        if (o.verticalDpi !== undefined) expect(o.verticalDpi).toBeGreaterThan(0);
+        if (o.bitsPerPixel !== undefined) expect(o.bitsPerPixel).toBeGreaterThan(0);
+        if (o.colorspace !== undefined) expect(typeof o.colorspace).toBe('string');
+        if (o.filters !== undefined) {
+          expect(Array.isArray(o.filters)).toBe(true);
+          for (const f of o.filters) expect(typeof f).toBe('string');
+        }
+        break;
+      }
+    }
+    expect(foundImage).toBe(true);
     p.close();
     doc2.destroy();
   });

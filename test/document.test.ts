@@ -88,6 +88,33 @@ describe('PDFiumDocument.getMetadata', () => {
     expect(perms.printHighQuality).toBe(true);
     doc.destroy();
   });
+
+  it('returns enriched metadata (isTagged, language, signatureCount, attachmentCount)', async () => {
+    const doc = await loadDocument(fixture('metadata.pdf'));
+    const meta = doc.metadata;
+    expect(typeof meta.isTagged).toBe('boolean');
+    expect(typeof meta.language).toBe('string');
+    expect(typeof meta.signatureCount).toBe('number');
+    expect(meta.signatureCount).toBeGreaterThanOrEqual(0);
+    expect(typeof meta.attachmentCount).toBe('number');
+    expect(meta.attachmentCount).toBeGreaterThanOrEqual(0);
+    doc.destroy();
+  });
+
+  it('detects tagged PDF with language from tagged.pdf', async () => {
+    const doc = await loadDocument(fixture('tagged.pdf'));
+    const meta = doc.metadata;
+    expect(meta.isTagged).toBe(true);
+    expect(meta.language).toBe('en-US');
+    doc.destroy();
+  });
+
+  it('returns isTagged=false for untagged PDF', async () => {
+    const doc = await loadDocument(fixture('minimal.pdf'));
+    expect(doc.metadata.isTagged).toBe(false);
+    expect(doc.metadata.language).toBe('');
+    doc.destroy();
+  });
 });
 
 describe('PDFiumDocument.getBookmarks', () => {
@@ -110,6 +137,48 @@ describe('PDFiumDocument.getBookmarks', () => {
     expect(bookmarks[1]!.pageIndex).toBe(1);
     expect(bookmarks[2]!.title).toBe('Chapter 3');
     expect(bookmarks[2]!.pageIndex).toBe(2);
+
+    // enriched bookmark properties
+    for (const bm of bookmarks) {
+      expect(typeof bm.open).toBe('boolean');
+    }
+
+    doc.destroy();
+  });
+
+  it('returns rich bookmark enrichments (destX/Y/Zoom, open, children, URI)', async () => {
+    const doc = await loadDocument(fixture('rich-bookmarks.pdf'));
+    const bookmarks = await doc.getBookmarks();
+    expect(bookmarks.length).toBe(3);
+
+    // chapter 1: XYZ dest, open, has children
+    const ch1 = bookmarks[0]!;
+    expect(ch1.title).toBe('Chapter 1');
+    expect(ch1.pageIndex).toBe(0);
+    expect(ch1.open).toBe(true);
+    if (ch1.destX !== undefined) expect(ch1.destX).toBeCloseTo(50, 0);
+    if (ch1.destY !== undefined) expect(ch1.destY).toBeCloseTo(700, 0);
+    if (ch1.destZoom !== undefined) expect(ch1.destZoom).toBeCloseTo(1, 0);
+    expect(ch1.children).toBeDefined();
+    expect(ch1.children!.length).toBe(1);
+
+    // section 1.1: child with XYZ dest
+    const sec = ch1.children![0]!;
+    expect(sec.title).toBe('Section 1.1');
+    expect(sec.pageIndex).toBe(1);
+    if (sec.destZoom !== undefined) expect(sec.destZoom).toBeCloseTo(1.5, 1);
+
+    // resources: URI action
+    const res = bookmarks[1]!;
+    expect(res.title).toBe('Resources (link)');
+    expect(res.actionType).toBe('uri');
+    expect(res.url).toBe('https://example.com/resources');
+
+    // chapter 2: page 3 dest
+    const ch2 = bookmarks[2]!;
+    expect(ch2.title).toBe('Chapter 2');
+    expect(ch2.pageIndex).toBe(2);
+
     doc.destroy();
   });
 });

@@ -161,6 +161,9 @@ private:
       if (opts.Has("grayscale") &&
           opts.Get("grayscale").As<Napi::Boolean>().Value())
         renderFlags |= FPDF_GRAYSCALE;
+      if (opts.Has("lcdText") &&
+          opts.Get("lcdText").As<Napi::Boolean>().Value())
+        renderFlags |= FPDF_LCD_TEXT;
     }
 
     if (renderWidth == 0)
@@ -255,6 +258,9 @@ private:
       if (opts.Has("wholeWord") &&
           opts.Get("wholeWord").As<Napi::Boolean>().Value())
         flags |= FPDF_MATCHWHOLEWORD;
+      if (opts.Has("consecutive") &&
+          opts.Get("consecutive").As<Napi::Boolean>().Value())
+        flags |= FPDF_CONSECUTIVE;
     }
 
     auto *worker = new SearchWorker(env, page_, std::move(needle), flags,

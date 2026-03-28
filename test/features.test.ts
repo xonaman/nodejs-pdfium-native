@@ -68,6 +68,17 @@ describe('PDFiumPage.getAnnotations', () => {
     expect(highlightAnnot).toBeDefined();
     expect(highlightAnnot!.contents).toBe('Highlighted text');
     expect(highlightAnnot!.bounds).toBeDefined();
+    // quad points should be present for highlight annotations
+    if (highlightAnnot!.quadPoints) {
+      expect(Array.isArray(highlightAnnot!.quadPoints)).toBe(true);
+      if (highlightAnnot!.quadPoints.length > 0) {
+        const qp = highlightAnnot!.quadPoints[0]!;
+        expect(typeof qp.x1).toBe('number');
+        expect(typeof qp.y1).toBe('number');
+        expect(typeof qp.x4).toBe('number');
+        expect(typeof qp.y4).toBe('number');
+      }
+    }
 
     page.close();
     doc.destroy();
@@ -87,6 +98,38 @@ describe('PDFiumPage.getAnnotations', () => {
     expect(annot.creationDate).toBe('D:20250101120000Z');
     expect(annot.modDate).toBe('D:20250102120000Z');
     expect(annot.flags).toBe(4); // print flag
+
+    page.close();
+    doc.destroy();
+  });
+
+  it('returns border and interior color for square/circle annotations', async () => {
+    const doc = await loadDocument(fixture('border-annotations.pdf'));
+    const page = await doc.getPage(0);
+    const annotations = await page.getAnnotations();
+    expect(annotations.length).toBe(2);
+
+    // square annotation with border and interior color
+    const square = annotations.find((a) => a.type === 'square');
+    expect(square).toBeDefined();
+    expect(square!.contents).toBe('Filled square');
+    expect(square!.color).toBeDefined(); // blue stroke
+    if (square!.interiorColor) {
+      expect(square!.interiorColor.r).toBeGreaterThan(200); // yellow = high R
+      expect(square!.interiorColor.g).toBeGreaterThan(200); // yellow = high G
+    }
+    if (square!.border) {
+      expect(typeof square!.border.width).toBe('number');
+      expect(square!.border.width).toBeGreaterThan(0);
+    }
+
+    // circle annotation with interior color
+    const circle = annotations.find((a) => a.type === 'circle');
+    expect(circle).toBeDefined();
+    expect(circle!.contents).toBe('Filled circle');
+    if (circle!.interiorColor) {
+      expect(circle!.interiorColor.g).toBeGreaterThan(200); // green fill
+    }
 
     page.close();
     doc.destroy();

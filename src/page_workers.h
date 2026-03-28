@@ -81,6 +81,7 @@ private:
 struct SearchMatchData {
   int charIndex;
   int length;
+  std::u16string matchedText;
   struct Rect {
     double left, bottom, right, top;
   };
@@ -121,6 +122,17 @@ protected:
         match.charIndex = FPDFText_GetSchResultIndex(handle);
         match.length = FPDFText_GetSchCount(handle);
 
+        // extract the matched text
+        int textBufLen = match.length + 1;
+        std::vector<unsigned short> textBuf(textBufLen);
+        int got = FPDFText_GetText(textPage, match.charIndex, match.length,
+                                   textBuf.data());
+        if (got > 0) {
+          match.matchedText =
+              std::u16string(reinterpret_cast<const char16_t *>(textBuf.data()),
+                             static_cast<size_t>(got - 1));
+        }
+
         int numRects =
             FPDFText_CountRects(textPage, match.charIndex, match.length);
         for (int r = 0; r < numRects; r++) {
@@ -144,6 +156,12 @@ protected:
       Napi::Object match = Napi::Object::New(env);
       match.Set("charIndex", Napi::Number::New(env, m.charIndex));
       match.Set("length", Napi::Number::New(env, m.length));
+      if (!m.matchedText.empty())
+        match.Set("matchedText",
+                  Napi::String::New(
+                      env,
+                      reinterpret_cast<const char16_t *>(m.matchedText.data()),
+                      m.matchedText.size()));
 
       Napi::Array rects = Napi::Array::New(env, m.rects.size());
       for (uint32_t r = 0; r < m.rects.size(); r++) {
@@ -184,6 +202,7 @@ struct LinkData {
   // destination location
   float destX = 0, destY = 0, destZoom = 0;
   bool hasDestX = false, hasDestY = false, hasDestZoom = false;
+  std::string filePath;
 };
 
 class GetLinksWorker : public Napi::AsyncWorker {
@@ -251,6 +270,17 @@ protected:
             data.url = std::string(buf.data(), len - 1);
           }
         }
+
+        // file path for remote goto / launch actions
+        if (actionType == PDFACTION_REMOTEGOTO ||
+            actionType == PDFACTION_LAUNCH) {
+          unsigned long fpLen = FPDFAction_GetFilePath(action, nullptr, 0);
+          if (fpLen > 0) {
+            std::vector<char> fpBuf(fpLen);
+            FPDFAction_GetFilePath(action, fpBuf.data(), fpLen);
+            data.filePath = std::string(fpBuf.data(), fpLen - 1);
+          }
+        }
       }
 
       FPDF_DEST dest = FPDFLink_GetDest(doc_, link);
@@ -308,6 +338,8 @@ protected:
         obj.Set("destY", Napi::Number::New(env, d.destY));
       if (d.hasDestZoom)
         obj.Set("destZoom", Napi::Number::New(env, d.destZoom));
+      if (!d.filePath.empty())
+        obj.Set("filePath", Napi::String::New(env, d.filePath));
       arr.Set(i, obj);
     }
     deferred_.Resolve(arr);
@@ -337,11 +369,19 @@ struct AnnotationData {
   std::u16string contents;
   unsigned int r = 0, g = 0, b = 0, a = 0;
   bool hasColor = false;
+  unsigned int ir = 0, ig = 0, ib = 0, ia = 0;
+  bool hasInteriorColor = false;
+  float borderHRadius = 0, borderVRadius = 0, borderWidth = 0;
+  bool hasBorder = false;
   std::u16string author;
   std::u16string subject;
   std::u16string creationDate;
   std::u16string modDate;
   int flags = 0;
+  struct QuadPoints {
+    float x1, y1, x2, y2, x3, y3, x4, y4;
+  };
+  std::vector<QuadPoints> quadPoints;
 };
 
 class GetAnnotationsWorker : public Napi::AsyncWorker {
@@ -391,6 +431,12 @@ protected:
       case FPDF_ANNOT_CIRCLE:
         data.type = "circle";
         break;
+      case FPDF_ANNOT_POLYGON:
+        data.type = "polygon";
+        break;
+      case FPDF_ANNOT_POLYLINE:
+        data.type = "polyline";
+        break;
       case FPDF_ANNOT_HIGHLIGHT:
         data.type = "highlight";
         break;
@@ -406,17 +452,29 @@ protected:
       case FPDF_ANNOT_STAMP:
         data.type = "stamp";
         break;
+      case FPDF_ANNOT_CARET:
+        data.type = "caret";
+        break;
       case FPDF_ANNOT_INK:
         data.type = "ink";
         break;
       case FPDF_ANNOT_POPUP:
         data.type = "popup";
         break;
+      case FPDF_ANNOT_FILEATTACHMENT:
+        data.type = "fileattachment";
+        break;
+      case FPDF_ANNOT_SOUND:
+        data.type = "sound";
+        break;
       case FPDF_ANNOT_WIDGET:
         data.type = "widget";
         break;
       case FPDF_ANNOT_REDACT:
         data.type = "redact";
+        break;
+      case FPDF_ANNOT_WATERMARK:
+        data.type = "watermark";
         break;
       default:
         data.type = "unknown";
@@ -453,6 +511,39 @@ protected:
         data.g = cg;
         data.b = cb;
         data.a = ca;
+      }
+
+      // interior color (fill color for markup annotations)
+      unsigned int icr, icg, icb, ica;
+      if (FPDFAnnot_GetColor(annot, FPDFANNOT_COLORTYPE_InteriorColor, &icr,
+                             &icg, &icb, &ica)) {
+        data.hasInteriorColor = true;
+        data.ir = icr;
+        data.ig = icg;
+        data.ib = icb;
+        data.ia = ica;
+      }
+
+      // border style
+      float hRadius, vRadius, bWidth;
+      if (FPDFAnnot_GetBorder(annot, &hRadius, &vRadius, &bWidth)) {
+        data.hasBorder = true;
+        data.borderHRadius = hRadius;
+        data.borderVRadius = vRadius;
+        data.borderWidth = bWidth;
+      }
+
+      // quad points (for highlight, underline, squiggly, strikeout, link,
+      // redact)
+      if (FPDFAnnot_HasAttachmentPoints(annot)) {
+        size_t qpCount = FPDFAnnot_CountAttachmentPoints(annot);
+        for (size_t qi = 0; qi < qpCount; qi++) {
+          FS_QUADPOINTSF qp;
+          if (FPDFAnnot_GetAttachmentPoints(annot, qi, &qp)) {
+            data.quadPoints.push_back(
+                {qp.x1, qp.y1, qp.x2, qp.y2, qp.x3, qp.y3, qp.x4, qp.y4});
+          }
+        }
       }
 
       // author ("T" key in PDF spec)
@@ -537,6 +628,10 @@ protected:
       } else {
         obj.Set("color", env.Null());
       }
+      if (d.hasInteriorColor) {
+        obj.Set("interiorColor",
+                CreateColorObject(env, d.ir, d.ig, d.ib, d.ia));
+      }
       if (d.author.empty()) {
         obj.Set("author", Napi::String::New(env, ""));
       } else {
@@ -571,6 +666,30 @@ protected:
                     d.modDate.size()));
       }
       obj.Set("flags", Napi::Number::New(env, d.flags));
+      if (d.hasBorder) {
+        Napi::Object border = Napi::Object::New(env);
+        border.Set("horizontalRadius", Napi::Number::New(env, d.borderHRadius));
+        border.Set("verticalRadius", Napi::Number::New(env, d.borderVRadius));
+        border.Set("width", Napi::Number::New(env, d.borderWidth));
+        obj.Set("border", border);
+      }
+      if (!d.quadPoints.empty()) {
+        Napi::Array qpArr = Napi::Array::New(env, d.quadPoints.size());
+        for (uint32_t qi = 0; qi < d.quadPoints.size(); qi++) {
+          auto &qp = d.quadPoints[qi];
+          Napi::Object qpObj = Napi::Object::New(env);
+          qpObj.Set("x1", Napi::Number::New(env, qp.x1));
+          qpObj.Set("y1", Napi::Number::New(env, qp.y1));
+          qpObj.Set("x2", Napi::Number::New(env, qp.x2));
+          qpObj.Set("y2", Napi::Number::New(env, qp.y2));
+          qpObj.Set("x3", Napi::Number::New(env, qp.x3));
+          qpObj.Set("y3", Napi::Number::New(env, qp.y3));
+          qpObj.Set("x4", Napi::Number::New(env, qp.x4));
+          qpObj.Set("y4", Napi::Number::New(env, qp.y4));
+          qpArr.Set(qi, qpObj);
+        }
+        obj.Set("quadPoints", qpArr);
+      }
       arr.Set(i, obj);
     }
     deferred_.Resolve(arr);
@@ -606,8 +725,17 @@ struct PageObjectData {
   int fontWeight = -1;
   int italicAngle = 0;
   bool hasItalicAngle = false;
+  std::string renderMode;
+  std::string fontFamily;
+  int isEmbedded = -1; // -1 = unknown, 0 = no, 1 = yes
+  int fontFlags = -1;
   // image-specific
   unsigned int imageWidth = 0, imageHeight = 0;
+  float horizontalDpi = 0, verticalDpi = 0;
+  unsigned int bitsPerPixel = 0;
+  std::string colorspace;
+  std::vector<std::string> filters;
+  bool hasImageMetadata = false;
 };
 
 class GetObjectWorker : public Napi::AsyncWorker {
@@ -709,12 +837,113 @@ protected:
           data_.hasItalicAngle = true;
           data_.italicAngle = angle;
         }
+
+        // font family name
+        size_t famLen = FPDFFont_GetFamilyName(font, nullptr, 0);
+        if (famLen > 1) {
+          std::vector<char> famBuf(famLen);
+          FPDFFont_GetFamilyName(font, famBuf.data(), famLen);
+          data_.fontFamily = std::string(famBuf.data(), famLen - 1);
+        }
+
+        data_.isEmbedded = FPDFFont_GetIsEmbedded(font);
+        data_.fontFlags = FPDFFont_GetFlags(font);
+      }
+
+      // text render mode
+      FPDF_TEXT_RENDERMODE rm = FPDFTextObj_GetTextRenderMode(obj);
+      switch (rm) {
+      case FPDF_TEXTRENDERMODE_FILL:
+        data_.renderMode = "fill";
+        break;
+      case FPDF_TEXTRENDERMODE_STROKE:
+        data_.renderMode = "stroke";
+        break;
+      case FPDF_TEXTRENDERMODE_FILL_STROKE:
+        data_.renderMode = "fillStroke";
+        break;
+      case FPDF_TEXTRENDERMODE_INVISIBLE:
+        data_.renderMode = "invisible";
+        break;
+      case FPDF_TEXTRENDERMODE_FILL_CLIP:
+        data_.renderMode = "fillClip";
+        break;
+      case FPDF_TEXTRENDERMODE_STROKE_CLIP:
+        data_.renderMode = "strokeClip";
+        break;
+      case FPDF_TEXTRENDERMODE_FILL_STROKE_CLIP:
+        data_.renderMode = "fillStrokeClip";
+        break;
+      case FPDF_TEXTRENDERMODE_CLIP:
+        data_.renderMode = "clip";
+        break;
+      default:
+        data_.renderMode = "unknown";
+        break;
       }
     }
 
     if (type == FPDF_PAGEOBJ_IMAGE) {
       FPDFImageObj_GetImagePixelSize(obj, &data_.imageWidth,
                                      &data_.imageHeight);
+
+      // rich image metadata
+      FPDF_IMAGEOBJ_METADATA meta;
+      if (FPDFImageObj_GetImageMetadata(obj, page_, &meta)) {
+        data_.hasImageMetadata = true;
+        data_.horizontalDpi = meta.horizontal_dpi;
+        data_.verticalDpi = meta.vertical_dpi;
+        data_.bitsPerPixel = meta.bits_per_pixel;
+        switch (meta.colorspace) {
+        case FPDF_COLORSPACE_DEVICEGRAY:
+          data_.colorspace = "deviceGray";
+          break;
+        case FPDF_COLORSPACE_DEVICERGB:
+          data_.colorspace = "deviceRGB";
+          break;
+        case FPDF_COLORSPACE_DEVICECMYK:
+          data_.colorspace = "deviceCMYK";
+          break;
+        case FPDF_COLORSPACE_CALGRAY:
+          data_.colorspace = "calGray";
+          break;
+        case FPDF_COLORSPACE_CALRGB:
+          data_.colorspace = "calRGB";
+          break;
+        case FPDF_COLORSPACE_LAB:
+          data_.colorspace = "lab";
+          break;
+        case FPDF_COLORSPACE_ICCBASED:
+          data_.colorspace = "iccBased";
+          break;
+        case FPDF_COLORSPACE_SEPARATION:
+          data_.colorspace = "separation";
+          break;
+        case FPDF_COLORSPACE_DEVICEN:
+          data_.colorspace = "deviceN";
+          break;
+        case FPDF_COLORSPACE_INDEXED:
+          data_.colorspace = "indexed";
+          break;
+        case FPDF_COLORSPACE_PATTERN:
+          data_.colorspace = "pattern";
+          break;
+        default:
+          data_.colorspace = "unknown";
+          break;
+        }
+      }
+
+      // compression filters
+      int filterCount = FPDFImageObj_GetImageFilterCount(obj);
+      for (int fi = 0; fi < filterCount; fi++) {
+        unsigned long fLen = FPDFImageObj_GetImageFilter(obj, fi, nullptr, 0);
+        if (fLen > 1) {
+          std::vector<char> fBuf(fLen);
+          FPDFImageObj_GetImageFilter(obj, fi, fBuf.data(), fLen);
+          data_.filters.emplace_back(fBuf.data(), fLen - 1);
+        }
+      }
     }
   }
 
@@ -755,11 +984,34 @@ protected:
         result.Set("fontWeight", Napi::Number::New(env, data_.fontWeight));
       if (data_.hasItalicAngle)
         result.Set("italicAngle", Napi::Number::New(env, data_.italicAngle));
+      if (!data_.renderMode.empty())
+        result.Set("renderMode", Napi::String::New(env, data_.renderMode));
+      if (!data_.fontFamily.empty())
+        result.Set("fontFamily", Napi::String::New(env, data_.fontFamily));
+      if (data_.isEmbedded >= 0)
+        result.Set("isEmbedded",
+                   Napi::Boolean::New(env, data_.isEmbedded != 0));
+      if (data_.fontFlags >= 0)
+        result.Set("fontFlags", Napi::Number::New(env, data_.fontFlags));
     }
 
     if (data_.type == "image") {
       result.Set("imageWidth", Napi::Number::New(env, data_.imageWidth));
       result.Set("imageHeight", Napi::Number::New(env, data_.imageHeight));
+      if (data_.hasImageMetadata) {
+        result.Set("horizontalDpi",
+                   Napi::Number::New(env, data_.horizontalDpi));
+        result.Set("verticalDpi", Napi::Number::New(env, data_.verticalDpi));
+        result.Set("bitsPerPixel", Napi::Number::New(env, data_.bitsPerPixel));
+        if (!data_.colorspace.empty())
+          result.Set("colorspace", Napi::String::New(env, data_.colorspace));
+      }
+      if (!data_.filters.empty()) {
+        Napi::Array fArr = Napi::Array::New(env, data_.filters.size());
+        for (uint32_t fi = 0; fi < data_.filters.size(); fi++)
+          fArr.Set(fi, Napi::String::New(env, data_.filters[fi]));
+        result.Set("filters", fArr);
+      }
     }
 
     deferred_.Resolve(result);
@@ -786,6 +1038,11 @@ struct BookmarkData {
   std::u16string title;
   int pageIndex = -1;
   bool hasPageIndex = false;
+  bool open = false;
+  std::string actionType;
+  std::string url;
+  float destX = 0, destY = 0, destZoom = 0;
+  bool hasDestX = false, hasDestY = false, hasDestZoom = false;
   std::vector<BookmarkData> children;
 };
 
@@ -838,17 +1095,67 @@ private:
             reinterpret_cast<const char16_t *>(titleBuf.data()), charCount);
       }
 
+      // open/closed state: positive count = open, negative = closed
+      int count = FPDFBookmark_GetCount(child);
+      data.open = count > 0;
+
       FPDF_DEST dest = FPDFBookmark_GetDest(doc_, child);
+      FPDF_ACTION action = FPDFBookmark_GetAction(child);
+
+      if (!dest && action) {
+        dest = FPDFAction_GetDest(doc_, action);
+      }
+
       if (dest) {
         data.hasPageIndex = true;
         data.pageIndex = FPDFDest_GetDestPageIndex(doc_, dest);
-      } else {
-        FPDF_ACTION action = FPDFBookmark_GetAction(child);
-        if (action) {
-          FPDF_DEST actionDest = FPDFAction_GetDest(doc_, action);
-          if (actionDest) {
-            data.hasPageIndex = true;
-            data.pageIndex = FPDFDest_GetDestPageIndex(doc_, actionDest);
+
+        FPDF_BOOL hasX, hasY, hasZoom;
+        FS_FLOAT x, y, zoom;
+        if (FPDFDest_GetLocationInPage(dest, &hasX, &hasY, &hasZoom, &x, &y,
+                                       &zoom)) {
+          if (hasX) {
+            data.hasDestX = true;
+            data.destX = x;
+          }
+          if (hasY) {
+            data.hasDestY = true;
+            data.destY = y;
+          }
+          if (hasZoom) {
+            data.hasDestZoom = true;
+            data.destZoom = zoom;
+          }
+        }
+      }
+
+      if (action) {
+        unsigned long actionType = FPDFAction_GetType(action);
+        switch (actionType) {
+        case PDFACTION_GOTO:
+          data.actionType = "goto";
+          break;
+        case PDFACTION_REMOTEGOTO:
+          data.actionType = "remoteGoto";
+          break;
+        case PDFACTION_URI:
+          data.actionType = "uri";
+          break;
+        case PDFACTION_LAUNCH:
+          data.actionType = "launch";
+          break;
+        case PDFACTION_EMBEDDEDGOTO:
+          data.actionType = "embeddedGoto";
+          break;
+        }
+
+        if (actionType == PDFACTION_URI) {
+          unsigned long uriLen =
+              FPDFAction_GetURIPath(doc_, action, nullptr, 0);
+          if (uriLen > 0) {
+            std::vector<char> uriBuf(uriLen);
+            FPDFAction_GetURIPath(doc_, action, uriBuf.data(), uriLen);
+            data.url = std::string(uriBuf.data(), uriLen - 1);
           }
         }
       }
@@ -875,6 +1182,17 @@ private:
       }
       if (d.hasPageIndex)
         obj.Set("pageIndex", Napi::Number::New(env, d.pageIndex));
+      obj.Set("open", Napi::Boolean::New(env, d.open));
+      if (!d.actionType.empty())
+        obj.Set("actionType", Napi::String::New(env, d.actionType));
+      if (!d.url.empty())
+        obj.Set("url", Napi::String::New(env, d.url));
+      if (d.hasDestX)
+        obj.Set("destX", Napi::Number::New(env, d.destX));
+      if (d.hasDestY)
+        obj.Set("destY", Napi::Number::New(env, d.destY));
+      if (d.hasDestZoom)
+        obj.Set("destZoom", Napi::Number::New(env, d.destZoom));
       if (!d.children.empty())
         obj.Set("children", BuildArray(env, d.children));
       arr.Set(i, obj);

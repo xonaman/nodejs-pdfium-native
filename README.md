@@ -130,6 +130,12 @@ Returns the bookmark/outline tree. Returns `Promise<Bookmark[]>`.
 interface Bookmark {
   title: string;
   pageIndex?: number;
+  open: boolean; // whether the node is initially expanded
+  actionType?: 'goto' | 'remoteGoto' | 'uri' | 'launch' | 'embeddedGoto';
+  url?: string; // external URL for URI bookmarks
+  destX?: number; // destination X coordinate
+  destY?: number; // destination Y coordinate
+  destZoom?: number; // destination zoom level
   children?: Bookmark[];
 }
 ```
@@ -142,12 +148,17 @@ Closes the document and frees all native resources. Must be called when done.
 
 ### PDFiumPage
 
-| Property      | Type     | Description                                         |
-| ------------- | -------- | --------------------------------------------------- |
-| `width`       | `number` | Page width in points (1 pt = 1/72 inch).            |
-| `height`      | `number` | Page height in points.                              |
-| `number`      | `number` | 0-based page index.                                 |
-| `objectCount` | `number` | Number of page objects (text, images, paths, etc.). |
+| Property          | Type                | Description                                         |
+| ----------------- | ------------------- | --------------------------------------------------- |
+| `width`           | `number`            | Page width in points (1 pt = 1/72 inch).            |
+| `height`          | `number`            | Page height in points.                              |
+| `number`          | `number`            | 0-based page index.                                 |
+| `objectCount`     | `number`            | Number of page objects (text, images, paths, etc.). |
+| `rotation`        | `number`            | Page rotation: 0, 1 (90° CW), 2 (180°), 3 (270°).   |
+| `hasTransparency` | `boolean`           | Whether the page has transparency.                  |
+| `label`           | `string?`           | Page label (e.g. 'i', 'ii', '1').                   |
+| `cropBox`         | `PageObjectBounds?` | Crop box (visible region), if set.                  |
+| `trimBox`         | `PageObjectBounds?` | Trim box (intended finished size), if set.          |
 
 #### `getText()`
 
@@ -169,6 +180,7 @@ interface PageRenderOptions {
   transparent?: boolean; // transparent background (PNG only, default: false)
   renderAnnotations?: boolean; // render annotations (default: true)
   grayscale?: boolean; // render in grayscale
+  lcdText?: boolean; // LCD-optimized sub-pixel text rendering
 }
 ```
 
@@ -184,8 +196,10 @@ type PageObject = TextPageObject | ImagePageObject | OtherPageObject;
 //   fillColor: { r, g, b, a } | null
 //   strokeColor: { r, g, b, a } | null
 
-// type: 'text' adds: text, fontSize, fontName
-// type: 'image' adds: imageWidth, imageHeight
+// type: 'text' adds: text, fontSize, fontName, fontWeight?, italicAngle?,
+//   renderMode?, fontFamily?, isEmbedded?, fontFlags?
+// type: 'image' adds: imageWidth, imageHeight, horizontalDpi?, verticalDpi?,
+//   bitsPerPixel?, colorspace?, filters?
 // type: 'path' | 'shading' | 'form' | 'unknown'
 ```
 
@@ -202,6 +216,7 @@ interface Link {
   destX?: number; // destination X coordinate
   destY?: number; // destination Y coordinate
   destZoom?: number; // destination zoom level
+  filePath?: string; // file path for remote goto / launch actions
 }
 ```
 
@@ -210,8 +225,12 @@ interface Link {
 Searches for text on the page. Returns `Promise<SearchMatch[]>` with character positions and bounding rectangles.
 
 ```typescript
-const matches = await page.search('invoice', { caseSensitive: true, wholeWord: false });
-// [{ charIndex: 42, length: 7, rects: [{ left, top, right, bottom }] }]
+const matches = await page.search('invoice', {
+  caseSensitive: true,
+  wholeWord: false,
+  consecutive: false,
+});
+// [{ charIndex: 42, length: 7, matchedText: 'invoice', rects: [{ left, top, right, bottom }] }]
 ```
 
 #### `getAnnotations()`
@@ -224,11 +243,14 @@ interface Annotation {
   bounds?: { left; bottom; right; top };
   contents: string;
   color: { r; g; b; a } | null;
+  interiorColor?: { r; g; b; a }; // fill color for markup annotations
   author: string; // annotation author
   subject: string; // annotation subject
   creationDate: string; // PDF date string (e.g. "D:20250101120000Z")
   modDate: string; // modification date
   flags: number; // annotation flags bitmask (PDF spec Table 165)
+  border?: { horizontalRadius; verticalRadius; width };
+  quadPoints?: Array<{ x1; y1; x2; y2; x3; y3; x4; y4 }>;
 }
 ```
 
@@ -261,6 +283,12 @@ interface DocumentMetadata {
     assemble: boolean;
     printHighQuality: boolean;
   };
+  isTagged: boolean; // whether the PDF is a tagged PDF
+  language: string; // document language (e.g. 'en-US')
+  signatureCount: number; // number of digital signatures
+  attachmentCount: number; // number of file attachments
+  permanentId?: string; // permanent file identifier (hex)
+  changingId?: string; // changing file identifier (hex)
 }
 ```
 

@@ -3,6 +3,7 @@ import type {
   Link,
   NativePage,
   PageObject,
+  PageObjectBounds,
   PageRenderOptions,
   SearchMatch,
   SearchOptions,
@@ -20,6 +21,16 @@ export class PDFiumPage {
   readonly number: number;
   /** Number of page objects (text spans, paths, images, etc.). */
   readonly objectCount: number;
+  /** Page rotation: 0 = none, 1 = 90° CW, 2 = 180°, 3 = 270° CW. */
+  readonly rotation: number;
+  /** Whether the page has transparency. */
+  readonly hasTransparency: boolean;
+  /** Page label (e.g. 'i', 'ii', '1', '2'). Only set if the document defines page labels. */
+  readonly label?: string;
+  /** Crop box (visible region), if explicitly set. */
+  readonly cropBox?: PageObjectBounds;
+  /** Trim box (intended finished page size), if explicitly set. */
+  readonly trimBox?: PageObjectBounds;
 
   /** @internal */
   constructor(private native: NativePage) {
@@ -27,6 +38,11 @@ export class PDFiumPage {
     this.height = native.height;
     this.number = native.number;
     this.objectCount = native.objectCount;
+    this.rotation = native.rotation;
+    this.hasTransparency = native.hasTransparency;
+    if (native.label !== undefined) this.label = native.label;
+    if (native.cropBox !== undefined) this.cropBox = native.cropBox;
+    if (native.trimBox !== undefined) this.trimBox = native.trimBox;
   }
 
   /** Extracts all text from the page. */

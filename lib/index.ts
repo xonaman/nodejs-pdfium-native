@@ -44,10 +44,12 @@ export {
 export { PDFiumPage } from './page.js';
 export type {
   Annotation,
+  AnnotationBorder,
   AnnotationType,
   Bookmark,
   DocumentMetadata,
   DocumentPermissions,
+  ImageColorspace,
   ImagePageObject,
   Link,
   LinkActionType,
@@ -55,9 +57,11 @@ export type {
   PageObject,
   PageObjectBounds,
   PageRenderOptions,
+  QuadPoints,
   RGBA,
   SearchMatch,
   SearchOptions,
   SearchRect,
   TextPageObject,
+  TextRenderMode,
 } from './types.js';
