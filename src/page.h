@@ -1,7 +1,12 @@
 #pragma once
 
-#include "page_workers.h"
+#include "annotations_worker.h"
+#include "form_fields_worker.h"
+#include "links_worker.h"
+#include "objects_worker.h"
 #include "render_worker.h"
+#include "search_worker.h"
+#include "text_worker.h"
 
 #include <algorithm>
 #include <atomic>

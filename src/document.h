@@ -1,5 +1,6 @@
 #pragma once
 
+#include "bookmarks_worker.h"
 #include "page.h"
 
 #include <atomic>

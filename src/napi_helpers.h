@@ -24,6 +24,13 @@ constexpr int MAX_RENDER_DIMENSION = 16384;
 // maximum bookmark tree recursion depth
 constexpr int MAX_BOOKMARK_DEPTH = 64;
 
+// common alive-check macro for all page workers
+#define CHECK_ALIVE()                                                          \
+  if (!pageAlive_->load() || (docAlive_ && !docAlive_->load())) {              \
+    SetError("Page or document was closed");                                   \
+    return;                                                                    \
+  }
+
 // ---------------------------------------------------------------------------
 // PDFium UTF-16 string helpers
 // ---------------------------------------------------------------------------
