@@ -20,7 +20,7 @@ jobs:
           - os: macos-latest
             platform: darwin
             arch: arm64
-          - os: macos-13
+          - os: macos-14
             platform: darwin
             arch: x64
           - os: windows-latest
@@ -29,17 +29,12 @@ jobs:
           - os: windows-11-arm
             platform: win32
             arch: arm64
-          - os: windows-latest
-            platform: win32
-            arch: ia32
-            node-arch: ia32
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-          architecture: ${{ matrix.node-arch || matrix.arch }}
 
       - name: Install dependencies
         run: npm ci --ignore-scripts
@@ -48,7 +43,7 @@ jobs:
         run: node scripts/download-pdfium.mjs
 
       - name: Build native addon
-        run: node-gyp rebuild
+        run: npx node-gyp rebuild
 
       - name: Bundle shared library
         run: node scripts/bundle-lib.mjs
@@ -85,13 +80,8 @@ jobs:
         include:
           - arch: arm
             docker-platform: linux/arm/v7
-            docker-image: arm32v7/node:22-bookworm
-          - arch: ia32
-            docker-platform: linux/386
-            docker-image: i386/node:22-bookworm
           - arch: ppc64
             docker-platform: linux/ppc64le
-            docker-image: ppc64le/node:22-bookworm
     steps:
       - uses: actions/checkout@v6
 
@@ -104,7 +94,7 @@ jobs:
           docker run --rm --platform ${{ matrix.docker-platform }} \
             -v "${{ github.workspace }}:/workspace" \
             -w /workspace \
-            ${{ matrix.docker-image }} \
+            node:22-bookworm \
             bash -c "
               apt-get update && apt-get install -y python3 make g++ &&
               npm ci --ignore-scripts &&

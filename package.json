@@ -48,7 +48,6 @@
     "x64",
     "arm64",
     "arm",
-    "ia32",
     "ppc64"
   ],
   "scripts": {

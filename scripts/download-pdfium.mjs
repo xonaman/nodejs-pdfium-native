@@ -30,16 +30,13 @@ const TARGETS = {
   'linux-x64': 'pdfium-linux-x64',
   'linux-arm64': 'pdfium-linux-arm64',
   'linux-arm': 'pdfium-linux-arm',
-  'linux-ia32': 'pdfium-linux-x86',
   'linux-ppc64': 'pdfium-linux-ppc64',
   // Linux (musl / Alpine)
   'linux-musl-x64': 'pdfium-linux-musl-x64',
   'linux-musl-arm64': 'pdfium-linux-musl-arm64',
-  'linux-musl-ia32': 'pdfium-linux-musl-x86',
   // Windows
   'win32-x64': 'pdfium-win-x64',
   'win32-arm64': 'pdfium-win-arm64',
-  'win32-ia32': 'pdfium-win-x86',
 };
 
 const platform = process.platform;

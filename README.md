@@ -14,12 +14,12 @@ Prebuilt PDFium binaries are downloaded automatically during install. A C++ comp
 
 ## Supported Platforms
 
-| OS                    | Architectures                |
-| --------------------- | ---------------------------- |
-| macOS                 | arm64, x64                   |
-| Linux (glibc)         | x64, arm64, arm, ia32, ppc64 |
-| Linux (musl / Alpine) | x64, arm64, ia32             |
-| Windows               | x64, arm64, ia32             |
+| OS                    | Architectures          |
+| --------------------- | ---------------------- |
+| macOS                 | arm64, x64             |
+| Linux (glibc)         | x64, arm64, arm, ppc64 |
+| Linux (musl / Alpine) | x64, arm64             |
+| Windows               | x64, arm64             |
 
 ## Quick Start
 
