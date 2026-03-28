@@ -1,16 +1,18 @@
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { loadDocument, PDFiumPage } from '../lib/index.js';
-import { fixturePath, pdfBuffer, twoPagesBuffer } from './fixtures.js';
+
+const fixture = (name: string) => resolve(import.meta.dirname!, 'fixtures', name);
 
 describe('PDFiumDocument', () => {
   it('returns correct page count', async () => {
-    const doc = await loadDocument(twoPagesBuffer);
+    const doc = await loadDocument(fixture('two-page.pdf'));
     expect(doc.pageCount).toBe(2);
     doc.destroy();
   });
 
   it('getPage returns a PDFiumPage', async () => {
-    const doc = await loadDocument(pdfBuffer);
+    const doc = await loadDocument(fixture('minimal.pdf'));
     const page = await doc.getPage(0);
     expect(page).toBeInstanceOf(PDFiumPage);
     page.close();
@@ -18,20 +20,20 @@ describe('PDFiumDocument', () => {
   });
 
   it('getPage rejects for out-of-range index', async () => {
-    const doc = await loadDocument(pdfBuffer);
+    const doc = await loadDocument(fixture('minimal.pdf'));
     await expect(doc.getPage(5)).rejects.toThrow();
     await expect(doc.getPage(-1)).rejects.toThrow();
     doc.destroy();
   });
 
   it('destroy prevents further use', async () => {
-    const doc = await loadDocument(pdfBuffer);
+    const doc = await loadDocument(fixture('minimal.pdf'));
     doc.destroy();
     await expect(doc.getPage(0)).rejects.toThrow('Document is destroyed');
   });
 
   it('pages() iterates over all pages', async () => {
-    const doc = await loadDocument(twoPagesBuffer);
+    const doc = await loadDocument(fixture('two-page.pdf'));
     const pages: PDFiumPage[] = [];
     for await (const page of doc.pages()) {
       pages.push(page);
@@ -46,7 +48,7 @@ describe('PDFiumDocument', () => {
 
 describe('PDFiumDocument.getMetadata', () => {
   it('returns metadata object with expected keys', async () => {
-    const doc = await loadDocument(pdfBuffer);
+    const doc = await loadDocument(fixture('minimal.pdf'));
     const meta = doc.metadata;
     expect(meta).toHaveProperty('title');
     expect(meta).toHaveProperty('author');
@@ -63,7 +65,7 @@ describe('PDFiumDocument.getMetadata', () => {
   });
 
   it('returns correct metadata values from a rich PDF', async () => {
-    const doc = await loadDocument(fixturePath('metadata.pdf'));
+    const doc = await loadDocument(fixture('metadata.pdf'));
     const meta = doc.metadata;
     expect(meta.title).toBe('Test Document Title');
     expect(meta.author).toBe('Test Author');
@@ -76,7 +78,7 @@ describe('PDFiumDocument.getMetadata', () => {
 
 describe('PDFiumDocument.getBookmarks', () => {
   it('returns an empty array for a PDF without bookmarks', async () => {
-    const doc = await loadDocument(pdfBuffer);
+    const doc = await loadDocument(fixture('minimal.pdf'));
     const bookmarks = doc.getBookmarks();
     expect(Array.isArray(bookmarks)).toBe(true);
     expect(bookmarks.length).toBe(0);
@@ -84,7 +86,7 @@ describe('PDFiumDocument.getBookmarks', () => {
   });
 
   it('returns bookmarks with titles and page indices', async () => {
-    const doc = await loadDocument(fixturePath('bookmarks.pdf'));
+    const doc = await loadDocument(fixture('bookmarks.pdf'));
     expect(doc.pageCount).toBe(3);
     const bookmarks = doc.getBookmarks();
     expect(bookmarks.length).toBe(3);

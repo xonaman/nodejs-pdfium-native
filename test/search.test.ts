@@ -1,10 +1,12 @@
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { loadDocument } from '../lib/index.js';
-import { textPdfBuffer } from './fixtures.js';
+
+const fixture = (name: string) => resolve(import.meta.dirname!, 'fixtures', name);
 
 describe('PDFiumPage.search', () => {
   it('finds text occurrences with positions', async () => {
-    const doc = await loadDocument(textPdfBuffer);
+    const doc = await loadDocument(fixture('text.pdf'));
     const page = await doc.getPage(0);
     const results = page.search('Hello');
     expect(results.length).toBe(1);
@@ -21,7 +23,7 @@ describe('PDFiumPage.search', () => {
   });
 
   it('returns empty for non-matching text', async () => {
-    const doc = await loadDocument(textPdfBuffer);
+    const doc = await loadDocument(fixture('text.pdf'));
     const page = await doc.getPage(0);
     const results = page.search('xyz-no-match');
     expect(results.length).toBe(0);
@@ -30,7 +32,7 @@ describe('PDFiumPage.search', () => {
   });
 
   it('respects caseSensitive option', async () => {
-    const doc = await loadDocument(textPdfBuffer);
+    const doc = await loadDocument(fixture('text.pdf'));
     const page = await doc.getPage(0);
     // case-insensitive (default) should find it
     const insensitive = page.search('hello');

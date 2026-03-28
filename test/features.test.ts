@@ -1,10 +1,12 @@
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { loadDocument } from '../lib/index.js';
-import { fixturePath, pdfBuffer } from './fixtures.js';
+
+const fixture = (name: string) => resolve(import.meta.dirname!, 'fixtures', name);
 
 describe('PDFiumPage.getLinks', () => {
   it('returns an empty array for a page with no links', async () => {
-    const doc = await loadDocument(pdfBuffer);
+    const doc = await loadDocument(fixture('minimal.pdf'));
     const page = await doc.getPage(0);
     const links = page.getLinks();
     expect(Array.isArray(links)).toBe(true);
@@ -14,7 +16,7 @@ describe('PDFiumPage.getLinks', () => {
   });
 
   it('returns links with URLs and page indices', async () => {
-    const doc = await loadDocument(fixturePath('links.pdf'));
+    const doc = await loadDocument(fixture('links.pdf'));
     const page = await doc.getPage(0);
     const links = page.getLinks();
     expect(links.length).toBe(2);
@@ -38,7 +40,7 @@ describe('PDFiumPage.getLinks', () => {
 
 describe('PDFiumPage.getAnnotations', () => {
   it('returns an empty array for a page with no annotations', async () => {
-    const doc = await loadDocument(pdfBuffer);
+    const doc = await loadDocument(fixture('minimal.pdf'));
     const page = await doc.getPage(0);
     const annotations = page.getAnnotations();
     expect(Array.isArray(annotations)).toBe(true);
@@ -48,7 +50,7 @@ describe('PDFiumPage.getAnnotations', () => {
   });
 
   it('returns annotations with types, bounds, and contents', async () => {
-    const doc = await loadDocument(fixturePath('annotations.pdf'));
+    const doc = await loadDocument(fixture('annotations.pdf'));
     const page = await doc.getPage(0);
     const annotations = page.getAnnotations();
     expect(annotations.length).toBe(2);

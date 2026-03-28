@@ -178,12 +178,39 @@ async function createBookmarkPdf() {
   return doc.save();
 }
 
+// --- Minimal single-page PDF ---
+async function createMinimalPdf() {
+  const doc = await PDFDocument.create();
+  doc.addPage([612, 792]);
+  return doc.save();
+}
+
+// --- Two-page PDF with different sizes ---
+async function createTwoPagePdf() {
+  const doc = await PDFDocument.create();
+  doc.addPage([612, 792]);
+  doc.addPage([400, 600]);
+  return doc.save();
+}
+
+// --- PDF with text content ---
+async function createTextPdf() {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([612, 792]);
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  page.drawText('Hello', { x: 100, y: 700, size: 12, font });
+  return doc.save();
+}
+
 // Generate all fixtures
 const fixtures = [
   ['metadata.pdf', createMetadataPdf],
   ['annotations.pdf', createAnnotationPdf],
   ['links.pdf', createLinkPdf],
   ['bookmarks.pdf', createBookmarkPdf],
+  ['minimal.pdf', createMinimalPdf],
+  ['two-page.pdf', createTwoPagePdf],
+  ['text.pdf', createTextPdf],
 ];
 
 for (const [name, generator] of fixtures) {

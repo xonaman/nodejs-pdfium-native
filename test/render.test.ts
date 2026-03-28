@@ -2,13 +2,14 @@ import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadDocument, PDFiumDocument } from '../lib/index.js';
-import { pdfBuffer } from './fixtures.js';
+
+const fixture = (name: string) => resolve(import.meta.dirname!, 'fixtures', name);
 
 describe('PDFiumPage.render', () => {
   let doc: PDFiumDocument;
 
   beforeAll(async () => {
-    doc = await loadDocument(pdfBuffer);
+    doc = await loadDocument(fixture('minimal.pdf'));
   });
 
   afterAll(() => {

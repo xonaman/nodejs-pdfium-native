@@ -1,13 +1,15 @@
+import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadDocument, PDFiumDocument, PDFiumPage } from '../lib/index.js';
-import { pdfBuffer, textPdfBuffer, twoPagesBuffer } from './fixtures.js';
+
+const fixture = (name: string) => resolve(import.meta.dirname!, 'fixtures', name);
 
 describe('PDFiumPage', () => {
   let doc: PDFiumDocument;
   let page: PDFiumPage;
 
   beforeAll(async () => {
-    doc = await loadDocument(pdfBuffer);
+    doc = await loadDocument(fixture('minimal.pdf'));
     page = await doc.getPage(0);
   });
 
@@ -46,7 +48,7 @@ describe('PDFiumPage', () => {
   });
 
   it('getObject returns type and bounds', async () => {
-    const doc2 = await loadDocument(textPdfBuffer);
+    const doc2 = await loadDocument(fixture('text.pdf'));
     const p = await doc2.getPage(0);
     const count = p.objectCount;
     expect(count).toBeGreaterThan(0);
@@ -84,7 +86,7 @@ describe('PDFiumPage', () => {
 
 describe('multi-page dimensions', () => {
   it('each page has its own dimensions', async () => {
-    const doc = await loadDocument(twoPagesBuffer);
+    const doc = await loadDocument(fixture('two-page.pdf'));
 
     const page0 = await doc.getPage(0);
     expect(page0.width).toBeCloseTo(612, 0);
@@ -102,7 +104,7 @@ describe('multi-page dimensions', () => {
 
 describe('page close', () => {
   it('close prevents further method calls', async () => {
-    const doc = await loadDocument(pdfBuffer);
+    const doc = await loadDocument(fixture('minimal.pdf'));
     const page = await doc.getPage(0);
     page.close();
     // width/height are cached — still accessible after close
@@ -114,7 +116,7 @@ describe('page close', () => {
   });
 
   it('double close does not throw', async () => {
-    const doc = await loadDocument(pdfBuffer);
+    const doc = await loadDocument(fixture('minimal.pdf'));
     const page = await doc.getPage(0);
     page.close();
     expect(() => page.close()).not.toThrow();
