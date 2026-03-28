@@ -1,5 +1,6 @@
 import type {
   Annotation,
+  FormField,
   Link,
   NativePage,
   PageObject,
@@ -88,5 +89,10 @@ export class PDFiumPage {
   /** Returns all annotations on the page. */
   getAnnotations(): Promise<Annotation[]> {
     return this.native.getAnnotations();
+  }
+
+  /** Returns all form fields on the page. */
+  getFormFields(): Promise<FormField[]> {
+    return this.native.getFormFields();
   }
 }

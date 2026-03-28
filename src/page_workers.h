@@ -10,6 +10,7 @@
 #include "fpdf_annot.h"
 #include "fpdf_doc.h"
 #include "fpdf_edit.h"
+#include "fpdf_formfill.h"
 #include "fpdf_text.h"
 
 // ---------------------------------------------------------------------------
@@ -1199,4 +1200,301 @@ private:
     }
     return arr;
   }
+};
+
+// ---------------------------------------------------------------------------
+// GetFormFieldsWorker — async form field extraction
+// ---------------------------------------------------------------------------
+
+struct FormFieldOptionData {
+  std::u16string label;
+  bool isSelected = false;
+};
+
+struct FormFieldData {
+  std::string type;
+  std::u16string name;
+  std::u16string value;
+  std::u16string alternateName;
+  std::u16string exportValue;
+  int flags = 0;
+  double left = 0, bottom = 0, right = 0, top = 0;
+  bool hasBounds = false;
+  bool isChecked = false;
+  std::vector<FormFieldOptionData> options;
+};
+
+class GetFormFieldsWorker : public Napi::AsyncWorker {
+public:
+  GetFormFieldsWorker(Napi::Env env, FPDF_PAGE page, FPDF_DOCUMENT doc,
+                      std::shared_ptr<std::atomic<bool>> pageAlive,
+                      std::shared_ptr<std::atomic<bool>> docAlive)
+      : Napi::AsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
+        page_(page), doc_(doc), pageAlive_(std::move(pageAlive)),
+        docAlive_(std::move(docAlive)) {}
+
+  Napi::Promise Promise() { return deferred_.Promise(); }
+
+protected:
+  void Execute() override {
+    std::lock_guard<std::mutex> lock(g_pdfium_mutex);
+    if (!pageAlive_->load() || (docAlive_ && !docAlive_->load())) {
+      SetError("Page or document was closed");
+      return;
+    }
+
+    // create a temporary form fill environment for read-only field access
+    FPDF_FORMFILLINFO formFillInfo{};
+    formFillInfo.version = 1;
+    FPDF_FORMHANDLE formHandle =
+        FPDFDOC_InitFormFillEnvironment(doc_, &formFillInfo);
+    if (!formHandle) {
+      return;
+    }
+
+    int count = FPDFPage_GetAnnotCount(page_);
+    for (int i = 0; i < count; i++) {
+      FPDF_ANNOTATION annot = FPDFPage_GetAnnot(page_, i);
+      if (!annot)
+        continue;
+
+      // only process widget annotations (form fields)
+      if (FPDFAnnot_GetSubtype(annot) != FPDF_ANNOT_WIDGET) {
+        FPDFPage_CloseAnnot(annot);
+        continue;
+      }
+
+      FormFieldData data;
+
+      // field type
+      int fieldType = FPDFAnnot_GetFormFieldType(formHandle, annot);
+      switch (fieldType) {
+      case FPDF_FORMFIELD_PUSHBUTTON:
+        data.type = "pushButton";
+        break;
+      case FPDF_FORMFIELD_CHECKBOX:
+        data.type = "checkbox";
+        break;
+      case FPDF_FORMFIELD_RADIOBUTTON:
+        data.type = "radioButton";
+        break;
+      case FPDF_FORMFIELD_COMBOBOX:
+        data.type = "comboBox";
+        break;
+      case FPDF_FORMFIELD_LISTBOX:
+        data.type = "listBox";
+        break;
+      case FPDF_FORMFIELD_TEXTFIELD:
+        data.type = "textField";
+        break;
+      case FPDF_FORMFIELD_SIGNATURE:
+        data.type = "signature";
+        break;
+      default:
+        data.type = "unknown";
+        break;
+      }
+
+      // field name (UTF-16LE)
+      unsigned long nameLen =
+          FPDFAnnot_GetFormFieldName(formHandle, annot, nullptr, 0);
+      if (nameLen > 2) {
+        std::vector<unsigned short> nameBuf(nameLen / sizeof(unsigned short));
+        FPDFAnnot_GetFormFieldName(
+            formHandle, annot, reinterpret_cast<FPDF_WCHAR *>(nameBuf.data()),
+            nameLen);
+        size_t charCount = nameLen / sizeof(unsigned short) - 1;
+        data.name = std::u16string(
+            reinterpret_cast<const char16_t *>(nameBuf.data()), charCount);
+      }
+
+      // field value (UTF-16LE)
+      unsigned long valueLen =
+          FPDFAnnot_GetFormFieldValue(formHandle, annot, nullptr, 0);
+      if (valueLen > 2) {
+        std::vector<unsigned short> valueBuf(valueLen / sizeof(unsigned short));
+        FPDFAnnot_GetFormFieldValue(
+            formHandle, annot, reinterpret_cast<FPDF_WCHAR *>(valueBuf.data()),
+            valueLen);
+        size_t charCount = valueLen / sizeof(unsigned short) - 1;
+        data.value = std::u16string(
+            reinterpret_cast<const char16_t *>(valueBuf.data()), charCount);
+      }
+
+      // alternate name (tooltip)
+      unsigned long altLen =
+          FPDFAnnot_GetFormFieldAlternateName(formHandle, annot, nullptr, 0);
+      if (altLen > 2) {
+        std::vector<unsigned short> altBuf(altLen / sizeof(unsigned short));
+        FPDFAnnot_GetFormFieldAlternateName(
+            formHandle, annot, reinterpret_cast<FPDF_WCHAR *>(altBuf.data()),
+            altLen);
+        size_t charCount = altLen / sizeof(unsigned short) - 1;
+        data.alternateName = std::u16string(
+            reinterpret_cast<const char16_t *>(altBuf.data()), charCount);
+      }
+
+      // export value (for checkboxes and radio buttons)
+      unsigned long expLen =
+          FPDFAnnot_GetFormFieldExportValue(formHandle, annot, nullptr, 0);
+      if (expLen > 2) {
+        std::vector<unsigned short> expBuf(expLen / sizeof(unsigned short));
+        FPDFAnnot_GetFormFieldExportValue(
+            formHandle, annot, reinterpret_cast<FPDF_WCHAR *>(expBuf.data()),
+            expLen);
+        size_t charCount = expLen / sizeof(unsigned short) - 1;
+        data.exportValue = std::u16string(
+            reinterpret_cast<const char16_t *>(expBuf.data()), charCount);
+      }
+
+      // field flags
+      data.flags = FPDFAnnot_GetFormFieldFlags(formHandle, annot);
+
+      // bounds
+      FS_RECTF rect;
+      if (FPDFAnnot_GetRect(annot, &rect)) {
+        data.hasBounds = true;
+        data.left = rect.left;
+        data.bottom = rect.bottom;
+        data.right = rect.right;
+        data.top = rect.top;
+      }
+
+      // checked state — derive from value/exportValue to avoid needing
+      // FORM_OnAfterLoadPage (which conflicts with page lifecycle)
+      if (fieldType == FPDF_FORMFIELD_CHECKBOX) {
+        // checkbox is checked when its value is not "Off"
+        static const std::u16string off = u"Off";
+        data.isChecked = !data.value.empty() && data.value != off;
+      } else if (fieldType == FPDF_FORMFIELD_RADIOBUTTON) {
+        // radio is checked when its appearance state (/AS) is not "Off"
+        // (FPDFAnnot_GetFormFieldExportValue requires FORM_OnAfterLoadPage)
+        static const std::u16string off = u"Off";
+        unsigned long asLen = FPDFAnnot_GetStringValue(annot, "AS", nullptr, 0);
+        if (asLen > 2) {
+          std::vector<unsigned short> asBuf(asLen / sizeof(unsigned short));
+          FPDFAnnot_GetStringValue(
+              annot, "AS", reinterpret_cast<FPDF_WCHAR *>(asBuf.data()), asLen);
+          size_t charCount = asLen / sizeof(unsigned short) - 1;
+          std::u16string as(reinterpret_cast<const char16_t *>(asBuf.data()),
+                            charCount);
+          data.isChecked = !as.empty() && as != off;
+        }
+      }
+
+      // options (combo box / list box)
+      int optCount = FPDFAnnot_GetOptionCount(formHandle, annot);
+      if (optCount > 0) {
+        for (int j = 0; j < optCount; j++) {
+          FormFieldOptionData opt;
+          unsigned long optLen =
+              FPDFAnnot_GetOptionLabel(formHandle, annot, j, nullptr, 0);
+          if (optLen > 2) {
+            std::vector<unsigned short> optBuf(optLen / sizeof(unsigned short));
+            FPDFAnnot_GetOptionLabel(
+                formHandle, annot, j,
+                reinterpret_cast<FPDF_WCHAR *>(optBuf.data()), optLen);
+            size_t charCount = optLen / sizeof(unsigned short) - 1;
+            opt.label = std::u16string(
+                reinterpret_cast<const char16_t *>(optBuf.data()), charCount);
+          }
+          opt.isSelected =
+              FPDFAnnot_IsOptionSelected(formHandle, annot, j) != 0;
+          data.options.push_back(std::move(opt));
+        }
+      }
+
+      fields_.push_back(std::move(data));
+      FPDFPage_CloseAnnot(annot);
+    }
+
+    FPDFDOC_ExitFormFillEnvironment(formHandle);
+  }
+
+  void OnOK() override {
+    Napi::Env env = Env();
+    Napi::Array arr = Napi::Array::New(env, fields_.size());
+    for (uint32_t i = 0; i < fields_.size(); i++) {
+      auto &d = fields_[i];
+      Napi::Object obj = Napi::Object::New(env);
+      obj.Set("type", Napi::String::New(env, d.type));
+
+      if (d.name.empty()) {
+        obj.Set("name", Napi::String::New(env, ""));
+      } else {
+        obj.Set("name",
+                Napi::String::New(
+                    env, reinterpret_cast<const char16_t *>(d.name.data()),
+                    d.name.size()));
+      }
+
+      if (d.value.empty()) {
+        obj.Set("value", Napi::String::New(env, ""));
+      } else {
+        obj.Set("value",
+                Napi::String::New(
+                    env, reinterpret_cast<const char16_t *>(d.value.data()),
+                    d.value.size()));
+      }
+
+      if (!d.alternateName.empty()) {
+        obj.Set("alternateName",
+                Napi::String::New(
+                    env,
+                    reinterpret_cast<const char16_t *>(d.alternateName.data()),
+                    d.alternateName.size()));
+      }
+
+      if (!d.exportValue.empty()) {
+        obj.Set("exportValue",
+                Napi::String::New(
+                    env,
+                    reinterpret_cast<const char16_t *>(d.exportValue.data()),
+                    d.exportValue.size()));
+      }
+
+      obj.Set("flags", Napi::Number::New(env, d.flags));
+
+      if (d.hasBounds)
+        obj.Set("bounds",
+                CreateBoundsObject(env, d.left, d.bottom, d.right, d.top));
+
+      obj.Set("isChecked", Napi::Boolean::New(env, d.isChecked));
+
+      if (!d.options.empty()) {
+        Napi::Array optArr = Napi::Array::New(env, d.options.size());
+        for (uint32_t j = 0; j < d.options.size(); j++) {
+          auto &opt = d.options[j];
+          Napi::Object optObj = Napi::Object::New(env);
+          if (opt.label.empty()) {
+            optObj.Set("label", Napi::String::New(env, ""));
+          } else {
+            optObj.Set("label",
+                       Napi::String::New(
+                           env,
+                           reinterpret_cast<const char16_t *>(opt.label.data()),
+                           opt.label.size()));
+          }
+          optObj.Set("isSelected", Napi::Boolean::New(env, opt.isSelected));
+          optArr.Set(j, optObj);
+        }
+        obj.Set("options", optArr);
+      }
+
+      arr.Set(i, obj);
+    }
+    deferred_.Resolve(arr);
+  }
+
+  void OnError(const Napi::Error &err) override {
+    deferred_.Reject(err.Value());
+  }
+
+private:
+  Napi::Promise::Deferred deferred_;
+  FPDF_PAGE page_;
+  FPDF_DOCUMENT doc_;
+  std::shared_ptr<std::atomic<bool>> pageAlive_;
+  std::shared_ptr<std::atomic<bool>> docAlive_;
+  std::vector<FormFieldData> fields_;
 };

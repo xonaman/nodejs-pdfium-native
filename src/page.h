@@ -29,6 +29,7 @@ public:
             InstanceMethod<&PDFiumPage::GetLinks>("getLinks"),
             InstanceMethod<&PDFiumPage::Search>("search"),
             InstanceMethod<&PDFiumPage::GetAnnotations>("getAnnotations"),
+            InstanceMethod<&PDFiumPage::GetFormFields>("getFormFields"),
             InstanceMethod<&PDFiumPage::Close>("close"),
         });
   }
@@ -281,6 +282,22 @@ private:
       return env.Null();
 
     auto *worker = new GetAnnotationsWorker(env, page_, alive_, docAlive_);
+    auto promise = worker->Promise();
+    worker->Queue();
+    return promise;
+  }
+
+  /**
+   * Returns all form fields on the page (async). Returns a
+   * Promise<FormField[]>.
+   */
+  Napi::Value GetFormFields(const Napi::CallbackInfo &info) {
+    Napi::Env env = info.Env();
+    EnsureOpen(env);
+    if (env.IsExceptionPending())
+      return env.Null();
+
+    auto *worker = new GetFormFieldsWorker(env, page_, doc_, alive_, docAlive_);
     auto promise = worker->Promise();
     worker->Queue();
     return promise;

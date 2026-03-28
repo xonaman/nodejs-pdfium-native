@@ -48,7 +48,7 @@ doc.destroy();
 - 🖼️ Generate thumbnails and previews for uploaded PDFs
 - 📄 Extract searchable text from documents at scale
 - ⚙️ Build server-side PDF processing pipelines
-- 🔗 Read annotations, bookmarks, and links from existing PDFs
+- 🔗 Read annotations, bookmarks, links, and form fields from existing PDFs
 
 ### 📊 How it compares
 
@@ -61,7 +61,7 @@ doc.destroy();
 | Annotations         | ✅                      | ❌                        | ⚠️ Partial        | ❌             | ❌                  |
 | Bookmarks           | ✅                      | ❌                        | ✅                | ❌             | ❌                  |
 | Links               | ✅                      | ❌                        | ✅                | ❌             | ❌                  |
-| Form fields         | ❌                      | ❌                        | ✅                | ❌             | ✅                  |
+| Form fields         | ✅                      | ❌                        | ✅                | ❌             | ✅                  |
 | Async I/O           | ✅ libuv workers        | ❌ Sync (WASM)            | ❌ Main thread    | ❌ Main thread | ⚠️ Events / streams |
 | Environment         | Node.js                 | Node.js + browser         | Node.js + browser | Node.js        | Node.js             |
 | Dependencies        | None¹                   | None (WASM bundled)       | None              | pdf.js         | None (since v3)     |
@@ -252,6 +252,43 @@ interface Annotation {
   border?: { horizontalRadius; verticalRadius; width };
   quadPoints?: Array<{ x1; y1; x2; y2; x3; y3; x4; y4 }>;
 }
+```
+
+#### `getFormFields()`
+
+Returns all form fields on the page. Returns `Promise<FormField[]>`.
+
+```typescript
+interface FormField {
+  type:
+    | 'unknown'
+    | 'pushButton'
+    | 'checkbox'
+    | 'radioButton'
+    | 'comboBox'
+    | 'listBox'
+    | 'textField'
+    | 'signature';
+  name: string; // field name
+  value: string; // current value
+  alternateName?: string; // tooltip / alternate field name
+  exportValue?: string; // export value (checkboxes / radio buttons)
+  flags: number; // field flags bitmask
+  bounds?: { left; bottom; right; top };
+  isChecked: boolean; // whether checkbox / radio is checked
+  options?: FormFieldOption[]; // options for combo box / list box
+}
+
+interface FormFieldOption {
+  label: string;
+  isSelected: boolean;
+}
+```
+
+```typescript
+const fields = await page.getFormFields();
+const textFields = fields.filter((f) => f.type === 'textField');
+const checked = fields.filter((f) => f.isChecked);
 ```
 
 #### `close()`

@@ -237,6 +237,44 @@ export interface Annotation {
 
 export type LinkActionType = 'goto' | 'remoteGoto' | 'uri' | 'launch' | 'embeddedGoto' | 'unknown';
 
+export type FormFieldType =
+  | 'pushButton'
+  | 'checkbox'
+  | 'radioButton'
+  | 'comboBox'
+  | 'listBox'
+  | 'textField'
+  | 'signature'
+  | 'unknown';
+
+export interface FormFieldOption {
+  /** Display label for this option. */
+  label: string;
+  /** Whether this option is currently selected. */
+  isSelected: boolean;
+}
+
+export interface FormField {
+  /** Form field type. */
+  type: FormFieldType;
+  /** Fully qualified field name. */
+  name: string;
+  /** Current field value. */
+  value: string;
+  /** Alternate (tooltip) name, if set. */
+  alternateName?: string;
+  /** Export value for checkboxes and radio buttons. */
+  exportValue?: string;
+  /** Raw form field flags bitmask. */
+  flags: number;
+  /** Bounding box in page coordinates, if available. */
+  bounds?: PageObjectBounds;
+  /** Whether the field is checked (checkbox/radio only). */
+  isChecked: boolean;
+  /** Available options for combo box and list box fields. */
+  options?: FormFieldOption[];
+}
+
 export interface Link {
   /** Bounding box in page coordinates, if available. */
   bounds?: PageObjectBounds;
@@ -348,6 +386,7 @@ export interface NativePage {
   getLinks(): Promise<Link[]>;
   search(text: string, options?: SearchOptions): Promise<SearchMatch[]>;
   getAnnotations(): Promise<Annotation[]>;
+  getFormFields(): Promise<FormField[]>;
   close(): void;
 }
 

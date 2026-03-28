@@ -444,6 +444,63 @@ async function createBorderAnnotationPdf() {
   return doc.save();
 }
 
+// --- PDF with form fields ---
+async function createFormFieldsPdf() {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([612, 792]);
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  page.drawText('Form Fields Test', { x: 50, y: 750, size: 16, font });
+
+  const form = doc.getForm();
+
+  // text field with default value
+  const textField = form.createTextField('fullName');
+  textField.setText('John Doe');
+  textField.addToPage(page, { x: 50, y: 680, width: 200, height: 24 });
+
+  // empty text field with alternate name
+  const emailField = form.createTextField('email');
+  emailField.addToPage(page, { x: 50, y: 640, width: 200, height: 24 });
+
+  // checkbox (checked)
+  const checkbox = form.createCheckBox('agree');
+  checkbox.addToPage(page, { x: 50, y: 600, width: 16, height: 16 });
+  checkbox.check();
+
+  // ensure checkbox /V and widget /AS are set (pdf-lib may not set /V properly)
+  const { PDFName: FormPDFName } = await import('pdf-lib');
+  checkbox.acroField.dict.set(FormPDFName.of('V'), FormPDFName.of('Yes'));
+  const checkboxWidgets = checkbox.acroField.getWidgets();
+  for (const w of checkboxWidgets) {
+    w.dict.set(FormPDFName.of('AS'), FormPDFName.of('Yes'));
+  }
+
+  // checkbox (unchecked)
+  const checkboxUnchecked = form.createCheckBox('newsletter');
+  checkboxUnchecked.addToPage(page, { x: 50, y: 570, width: 16, height: 16 });
+
+  // radio group
+  const radioGroup = form.createRadioGroup('color');
+  radioGroup.addOptionToPage('red', page, { x: 50, y: 530, width: 16, height: 16 });
+  radioGroup.addOptionToPage('green', page, { x: 100, y: 530, width: 16, height: 16 });
+  radioGroup.addOptionToPage('blue', page, { x: 150, y: 530, width: 16, height: 16 });
+  radioGroup.select('green');
+
+  // dropdown (combo box) with options
+  const dropdown = form.createDropdown('country');
+  dropdown.setOptions(['Germany', 'France', 'Italy', 'Spain']);
+  dropdown.select('France');
+  dropdown.addToPage(page, { x: 50, y: 480, width: 200, height: 24 });
+
+  // list box with options
+  const listBox = form.createOptionList('fruits');
+  listBox.setOptions(['Apple', 'Banana', 'Cherry', 'Date']);
+  listBox.select('Cherry');
+  listBox.addToPage(page, { x: 50, y: 400, width: 200, height: 60 });
+
+  return doc.save();
+}
+
 // Generate all fixtures
 const fixtures = [
   ['metadata.pdf', createMetadataPdf],
@@ -460,6 +517,7 @@ const fixtures = [
   ['image.pdf', createImagePdf],
   ['rich-bookmarks.pdf', createRichBookmarkPdf],
   ['border-annotations.pdf', createBorderAnnotationPdf],
+  ['form-fields.pdf', createFormFieldsPdf],
 ];
 
 for (const [name, generator] of fixtures) {
