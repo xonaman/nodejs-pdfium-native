@@ -40,7 +40,8 @@ const TARGETS = {
 };
 
 const platform = process.platform;
-const arch = process.arch;
+// support cross-compilation via npm_config_arch (e.g. win32 x64 → arm64)
+const arch = process.env.npm_config_arch || process.arch;
 const musl = isMusl();
 const key = musl ? `${platform}-musl-${arch}` : `${platform}-${arch}`;
 const target = TARGETS[key];

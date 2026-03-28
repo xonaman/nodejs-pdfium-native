@@ -1,11 +1,12 @@
 #pragma once
 
+#include <atomic>
 #include <mutex>
 #include <napi.h>
 
 #include "fpdfview.h"
 
-inline bool g_initialized = false;
+inline std::atomic<bool> g_initialized{false};
 
 // PDFium is not thread-safe — serialize all calls through a global mutex.
 // This unblocks the Node.js event loop while waiting for the lock.

@@ -149,7 +149,7 @@ protected:
     Napi::Env env = Env();
     Napi::Object pageObj = PDFiumDocument::pageConstructor.New({});
     PDFiumPage *pageWrapper = PDFiumPage::Unwrap(pageObj);
-    pageWrapper->SetPage(page_, doc_, pageIndex_);
+    pageWrapper->SetPage(page_, doc_, pageIndex_, width_, height_);
     pageWrapper->SetDocAlive(docAlive_);
 
     // register the page's alive flag with the document for invalidation

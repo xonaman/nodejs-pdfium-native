@@ -51,9 +51,10 @@ jobs:
           - os: windows-latest
             platform: win32
             arch: x64
-          - os: windows-11-arm
+          - os: windows-latest
             platform: win32
             arch: arm64
+            cross: true
     steps:
       - uses: actions/checkout@v6
 
@@ -66,14 +67,17 @@ jobs:
 
       - name: Download PDFium
         run: node scripts/download-pdfium.mjs
+        env:
+          npm_config_arch: ${{ matrix.arch }}
 
       - name: Build native addon
-        run: npx node-gyp rebuild
+        run: npx node-gyp rebuild --arch=${{ matrix.arch }}
 
       - name: Bundle shared library
         run: node scripts/bundle-lib.mjs
 
       - name: Run tests
+        if: ${{ !matrix.cross }}
         run: npm test
 
       - name: Create tarball
@@ -97,8 +101,18 @@ jobs:
         include:
           - arch: arm
             docker-platform: linux/arm/v7
+            image: node:22-bookworm
           - arch: ppc64
             docker-platform: linux/ppc64le
+            image: node:22-bookworm
+          - arch: x64
+            platform-suffix: musl
+            docker-platform: linux/amd64
+            image: node:22-alpine
+          - arch: arm64
+            platform-suffix: musl
+            docker-platform: linux/arm64
+            image: node:22-alpine
     steps:
       - uses: actions/checkout@v6
 
@@ -111,9 +125,13 @@ jobs:
           docker run --rm --platform ${{ matrix.docker-platform }} \
             -v "${{ github.workspace }}:/workspace" \
             -w /workspace \
-            node:22-bookworm \
-            bash -c "
-              apt-get update && apt-get install -y python3 make g++ &&
+            ${{ matrix.image }} \
+            sh -c "
+              if command -v apk > /dev/null; then
+                apk add --no-cache python3 make g++
+              else
+                apt-get update && apt-get install -y python3 make g++
+              fi &&
               npm ci --ignore-scripts &&
               node scripts/download-pdfium.mjs &&
               npx node-gyp rebuild &&
@@ -122,12 +140,18 @@ jobs:
             "
 
       - name: Create tarball
-        run: tar czf "pdfium-${{ github.ref_name }}-linux-${{ matrix.arch }}.tar.gz" build/Release/
+        run: |
+          suffix="${{ matrix.platform-suffix }}"
+          if [ -n "$suffix" ]; then
+            tar czf "pdfium-${{ github.ref_name }}-linux-${suffix}-${{ matrix.arch }}.tar.gz" build/Release/
+          else
+            tar czf "pdfium-${{ github.ref_name }}-linux-${{ matrix.arch }}.tar.gz" build/Release/
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v5
         with:
-          name: prebuild-linux-${{ matrix.arch }}
+          name: prebuild-linux-${{ matrix.platform-suffix && format('{0}-', matrix.platform-suffix) || '' }}${{ matrix.arch }}
           path: pdfium-*.tar.gz
 
   release:

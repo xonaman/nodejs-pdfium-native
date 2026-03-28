@@ -37,10 +37,13 @@ public:
       : Napi::ObjectWrap<PDFiumPage>(info),
         alive_(std::make_shared<std::atomic<bool>>(true)) {}
 
-  void SetPage(FPDF_PAGE page, FPDF_DOCUMENT doc, int index) {
+  void SetPage(FPDF_PAGE page, FPDF_DOCUMENT doc, int index, float width,
+               float height) {
     page_ = page;
     doc_ = doc;
     index_ = index;
+    width_ = width;
+    height_ = height;
   }
 
   // called by document to give this page a reference to the document's alive
@@ -56,6 +59,8 @@ private:
   FPDF_PAGE page_ = nullptr;
   FPDF_DOCUMENT doc_ = nullptr;
   int index_ = -1;
+  float width_ = 0;
+  float height_ = 0;
   std::shared_ptr<std::atomic<bool>> alive_;
   std::shared_ptr<std::atomic<bool>> docAlive_;
 
@@ -102,8 +107,10 @@ private:
     if (env.IsExceptionPending())
       return env.Null();
 
-    float origWidth = FPDF_GetPageWidthF(page_);
-    float origHeight = FPDF_GetPageHeightF(page_);
+    // use cached dimensions (set under mutex in GetPageWorker) to avoid
+    // PDFium API calls on the main thread that could race with workers
+    float origWidth = width_;
+    float origHeight = height_;
     double scale = 1.0;
     int renderWidth = 0;
     int renderHeight = 0;
@@ -269,8 +276,8 @@ private:
 
   void CleanUp() {
     if (page_) {
-      alive_->store(false);
       std::lock_guard<std::mutex> lock(g_pdfium_mutex);
+      alive_->store(false);
       FPDF_ClosePage(page_);
       page_ = nullptr;
       doc_ = nullptr;
