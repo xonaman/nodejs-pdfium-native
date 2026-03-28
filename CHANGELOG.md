@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.2] - 2026-03-28
+
+### Changed
+
+- README overhaul: benefit-driven headline, Quick Start moved above features, grouped "Why" section (Performance / Developer experience / Reliability), use cases section, competitor comparison table with actual packages (@hyzyla/pdfium, pdfjs-dist, pdf-parse, pdf2json)
+- Added npm badges (version, node, license, platform)
+- Expanded npm keywords for discoverability
+- Added homepage and bugs URLs to package.json
+
 ## [0.2.1] - 2026-03-28
 
 ### Changed
