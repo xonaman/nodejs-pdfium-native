@@ -13,6 +13,13 @@ import { pipeline } from 'node:stream/promises';
 const root = join(import.meta.dirname, '..');
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 const version = pkg.version;
+
+// validate version to prevent SSRF via malicious package.json
+if (!/^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$/.test(version)) {
+  console.error(`Invalid version format: ${version}`);
+  process.exit(1);
+}
+
 const repo = 'xonaman/nodejs-pdfium-native';
 
 const platform = process.platform;
