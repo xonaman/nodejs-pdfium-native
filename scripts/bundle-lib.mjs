@@ -11,15 +11,28 @@ if (!existsSync(nodeFile)) {
   process.exit(1);
 }
 
+/** Strip debug symbols from a binary. */
+function strip(file) {
+  // macOS: -S strips debug symbols only (preserves load commands in dylibs)
+  // Linux: -s strips all symbols
+  const args = process.platform === 'darwin' ? ['-S'] : ['-s'];
+  try {
+    execFileSync('strip', [...args, file], { stdio: 'inherit' });
+    console.log(`Stripped ${file.split('/').pop()}`);
+  } catch {
+    console.warn(`strip failed for ${file.split('/').pop()} — continuing`);
+  }
+}
+
 // on Windows, binding.gyp copies the DLL via "copies" — nothing else to do
 if (process.platform === 'win32') {
   const dll = join(outDir, 'pdfium.dll');
-  if (existsSync(dll)) {
-    console.log('pdfium.dll already in build/Release/ (copied by node-gyp).');
-  } else {
+  if (!existsSync(dll)) {
     console.error('pdfium.dll not found in build/Release/ — check binding.gyp copies.');
     process.exit(1);
   }
+  console.log('pdfium.dll already in build/Release/ (copied by node-gyp).');
+  strip(nodeFile);
   console.log('Bundle complete.');
   process.exit(0);
 }
@@ -60,6 +73,14 @@ if (process.platform === 'darwin') {
       });
       console.log(`Fixed install name: ${oldName} → @loader_path/${dylib}`);
     }
+  }
+}
+
+// strip debug symbols from shared libraries on Linux to reduce binary size
+// pdfium.node is stripped at link time via -Wl,-S in binding.gyp
+if (process.platform === 'linux') {
+  for (const lib of libs) {
+    strip(join(outDir, lib));
   }
 }
 
