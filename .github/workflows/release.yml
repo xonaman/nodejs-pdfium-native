@@ -45,6 +45,7 @@ jobs:
           - os: macos-latest
             platform: darwin
             arch: x64
+            cross: true
           - os: windows-latest
             platform: win32
             arch: x64
