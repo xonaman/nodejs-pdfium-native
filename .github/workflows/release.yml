@@ -39,15 +39,13 @@ jobs:
           - os: ubuntu-latest
             platform: linux
             arch: x64
-          - os: ubuntu-24.04-arm
-            platform: linux
-            arch: arm64
           - os: macos-latest
             platform: darwin
             arch: arm64
-          - os: macos-14
+          - os: macos-latest
             platform: darwin
             arch: x64
+            cross: true
           - os: windows-latest
             platform: win32
             arch: x64
@@ -99,6 +97,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - arch: arm64
+            docker-platform: linux/arm64
+            image: node:22-bookworm
           - arch: arm
             docker-platform: linux/arm/v7
             image: node:22-bookworm

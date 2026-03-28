@@ -3,6 +3,7 @@
  * Falls back to compiling from source if no prebuilt is available.
  *
  * Prebuilt tarball naming: pdfium-v{version}-{platform}-{arch}.tar.gz
+ * Musl (Alpine) naming:    pdfium-v{version}-linux-musl-{arch}.tar.gz
  * Contents: build/Release/pdfium.node + build/Release/libpdfium.{dylib,so,dll}
  */
 import { existsSync, mkdirSync, createWriteStream, readFileSync, unlinkSync } from 'node:fs';
@@ -20,9 +21,26 @@ if (!/^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$/.test(version)) {
   process.exit(1);
 }
 
+// detect musl libc (Alpine, Void, etc.)
+function isMusl() {
+  if (process.platform !== 'linux') return false;
+  try {
+    const ldd = execSync('ldd --version 2>&1 || true', { encoding: 'utf8' });
+    return ldd.toLowerCase().includes('musl');
+  } catch {
+    return (
+      existsSync('/lib/ld-musl-x86_64.so.1') ||
+      existsSync('/lib/ld-musl-aarch64.so.1') ||
+      existsSync('/lib/ld-musl-armhf.so.1')
+    );
+  }
+}
+
 const platform = process.platform;
 const arch = process.arch;
-const tarName = `pdfium-v${version}-${platform}-${arch}.tar.gz`;
+const musl = isMusl();
+const platformKey = musl ? `${platform}-musl` : platform;
+const tarName = `pdfium-v${version}-${platformKey}-${arch}.tar.gz`;
 
 // hardcoded origin ensures the URL can never point to an attacker-controlled host
 const releaseOrigin = 'https://github.com';
