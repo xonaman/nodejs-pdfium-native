@@ -20,12 +20,14 @@ if (!/^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$/.test(version)) {
   process.exit(1);
 }
 
-const repo = 'xonaman/nodejs-pdfium-native';
-
 const platform = process.platform;
 const arch = process.arch;
 const tarName = `pdfium-v${version}-${platform}-${arch}.tar.gz`;
-const releaseUrl = `https://github.com/${repo}/releases/download/v${version}/${tarName}`;
+
+// hardcoded origin ensures the URL can never point to an attacker-controlled host
+const releaseOrigin = 'https://github.com';
+const releasePath = `/xonaman/nodejs-pdfium-native/releases/download/v${version}/${tarName}`;
+const releaseUrl = new URL(releasePath, releaseOrigin);
 
 const outDir = join(root, 'build', 'Release');
 
@@ -33,6 +35,9 @@ async function tryDownload() {
   console.log(`Checking for prebuilt binary: ${tarName}`);
 
   try {
+    if (releaseUrl.origin !== releaseOrigin) {
+      throw new Error(`Unexpected URL origin: ${releaseUrl.origin}`);
+    }
     const res = await fetch(releaseUrl, { redirect: 'follow' });
     if (!res.ok) {
       console.log(`No prebuilt binary found (HTTP ${res.status}), will compile from source.`);
