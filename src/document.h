@@ -149,14 +149,13 @@ protected:
     hasTransparency_ = FPDFPage_HasTransparency(page_) != 0;
 
     // page label (UTF-16LE)
-    unsigned long labelLen = FPDF_GetPageLabel(doc_, pageIndex_, nullptr, 0);
-    if (labelLen > 2) {
-      std::vector<unsigned short> labelBuf(labelLen / sizeof(unsigned short));
-      FPDF_GetPageLabel(doc_, pageIndex_, labelBuf.data(), labelLen);
-      size_t charCount = labelLen / sizeof(unsigned short) - 1;
-      label_ = std::u16string(
-          reinterpret_cast<const char16_t *>(labelBuf.data()), charCount);
-    }
+    label_ = ReadU16(
+        [&](auto *, unsigned long) {
+          return FPDF_GetPageLabel(doc_, pageIndex_, nullptr, 0);
+        },
+        [&](FPDF_WCHAR *buf, unsigned long len) {
+          return FPDF_GetPageLabel(doc_, pageIndex_, buf, len);
+        });
 
     // optional page boxes
     float l, b, r, t;
@@ -192,11 +191,7 @@ protected:
     pageObj.Set("objectCount", Napi::Number::New(env, objectCount_));
     pageObj.Set("rotation", Napi::Number::New(env, rotation_));
     pageObj.Set("hasTransparency", Napi::Boolean::New(env, hasTransparency_));
-    if (!label_.empty())
-      pageObj.Set("label",
-                  Napi::String::New(
-                      env, reinterpret_cast<const char16_t *>(label_.data()),
-                      label_.size()));
+    SetU16IfPresent(pageObj, "label", env, label_);
     if (hasCropBox_)
       pageObj.Set("cropBox", CreateBoundsObject(env, cropLeft_, cropBottom_,
                                                 cropRight_, cropTop_));

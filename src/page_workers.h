@@ -13,6 +13,13 @@
 #include "fpdf_formfill.h"
 #include "fpdf_text.h"
 
+// common alive-check macro for all page workers
+#define CHECK_ALIVE()                                                          \
+  if (!pageAlive_->load() || (docAlive_ && !docAlive_->load())) {              \
+    SetError("Page or document was closed");                                   \
+    return;                                                                    \
+  }
+
 // ---------------------------------------------------------------------------
 // GetTextWorker — async text extraction
 // ---------------------------------------------------------------------------
@@ -31,10 +38,7 @@ public:
 protected:
   void Execute() override {
     std::lock_guard<std::mutex> lock(g_pdfium_mutex);
-    if (!pageAlive_->load() || (docAlive_ && !docAlive_->load())) {
-      SetError("Page or document was closed");
-      return;
-    }
+    CHECK_ALIVE();
 
     FPDF_TEXTPAGE textPage = FPDFText_LoadPage(page_);
     if (!textPage) {
@@ -104,10 +108,7 @@ public:
 protected:
   void Execute() override {
     std::lock_guard<std::mutex> lock(g_pdfium_mutex);
-    if (!pageAlive_->load() || (docAlive_ && !docAlive_->load())) {
-      SetError("Page or document was closed");
-      return;
-    }
+    CHECK_ALIVE();
 
     FPDF_TEXTPAGE textPage = FPDFText_LoadPage(page_);
     if (!textPage)
@@ -157,12 +158,7 @@ protected:
       Napi::Object match = Napi::Object::New(env);
       match.Set("charIndex", Napi::Number::New(env, m.charIndex));
       match.Set("length", Napi::Number::New(env, m.length));
-      if (!m.matchedText.empty())
-        match.Set("matchedText",
-                  Napi::String::New(
-                      env,
-                      reinterpret_cast<const char16_t *>(m.matchedText.data()),
-                      m.matchedText.size()));
+      SetU16IfPresent(match, "matchedText", env, m.matchedText);
 
       Napi::Array rects = Napi::Array::New(env, m.rects.size());
       for (uint32_t r = 0; r < m.rects.size(); r++) {
@@ -220,10 +216,7 @@ public:
 protected:
   void Execute() override {
     std::lock_guard<std::mutex> lock(g_pdfium_mutex);
-    if (!pageAlive_->load() || (docAlive_ && !docAlive_->load())) {
-      SetError("Page or document was closed");
-      return;
-    }
+    CHECK_ALIVE();
 
     int pos = 0;
     FPDF_LINK link;
@@ -242,26 +235,7 @@ protected:
       FPDF_ACTION action = FPDFLink_GetAction(link);
       if (action) {
         unsigned long actionType = FPDFAction_GetType(action);
-        switch (actionType) {
-        case PDFACTION_GOTO:
-          data.actionType = "goto";
-          break;
-        case PDFACTION_REMOTEGOTO:
-          data.actionType = "remoteGoto";
-          break;
-        case PDFACTION_URI:
-          data.actionType = "uri";
-          break;
-        case PDFACTION_LAUNCH:
-          data.actionType = "launch";
-          break;
-        case PDFACTION_EMBEDDEDGOTO:
-          data.actionType = "embeddedGoto";
-          break;
-        default:
-          data.actionType = "unknown";
-          break;
-        }
+        data.actionType = ActionTypeString(actionType);
 
         if (actionType == PDFACTION_URI) {
           unsigned long len = FPDFAction_GetURIPath(doc_, action, nullptr, 0);
@@ -399,10 +373,7 @@ public:
 protected:
   void Execute() override {
     std::lock_guard<std::mutex> lock(g_pdfium_mutex);
-    if (!pageAlive_->load() || (docAlive_ && !docAlive_->load())) {
-      SetError("Page or document was closed");
-      return;
-    }
+    CHECK_ALIVE();
 
     int count = FPDFPage_GetAnnotCount(page_);
     for (int i = 0; i < count; i++) {
@@ -491,18 +462,18 @@ protected:
         data.top = rect.top;
       }
 
-      unsigned long contentsLen =
-          FPDFAnnot_GetStringValue(annot, "Contents", nullptr, 0);
-      if (contentsLen > 2) {
-        std::vector<unsigned short> contentsBuf(contentsLen /
-                                                sizeof(unsigned short));
-        FPDFAnnot_GetStringValue(
-            annot, "Contents",
-            reinterpret_cast<FPDF_WCHAR *>(contentsBuf.data()), contentsLen);
-        size_t charCount = contentsLen / sizeof(unsigned short) - 1;
-        data.contents = std::u16string(
-            reinterpret_cast<const char16_t *>(contentsBuf.data()), charCount);
-      }
+      // helper to read annotation string values via ReadU16
+      auto readAnnotStr = [&](const char *key) {
+        return ReadU16(
+            [&](auto *, unsigned long) {
+              return FPDFAnnot_GetStringValue(annot, key, nullptr, 0);
+            },
+            [&](FPDF_WCHAR *buf, unsigned long len) {
+              return FPDFAnnot_GetStringValue(annot, key, buf, len);
+            });
+      };
+
+      data.contents = readAnnotStr("Contents");
 
       unsigned int cr, cg, cb, ca;
       if (FPDFAnnot_GetColor(annot, FPDFANNOT_COLORTYPE_Color, &cr, &cg, &cb,
@@ -547,56 +518,10 @@ protected:
         }
       }
 
-      // author ("T" key in PDF spec)
-      unsigned long authorLen =
-          FPDFAnnot_GetStringValue(annot, "T", nullptr, 0);
-      if (authorLen > 2) {
-        std::vector<unsigned short> authorBuf(authorLen /
-                                              sizeof(unsigned short));
-        FPDFAnnot_GetStringValue(
-            annot, "T", reinterpret_cast<FPDF_WCHAR *>(authorBuf.data()),
-            authorLen);
-        size_t charCount = authorLen / sizeof(unsigned short) - 1;
-        data.author = std::u16string(
-            reinterpret_cast<const char16_t *>(authorBuf.data()), charCount);
-      }
-
-      // subject ("Subj" key)
-      unsigned long subjLen =
-          FPDFAnnot_GetStringValue(annot, "Subj", nullptr, 0);
-      if (subjLen > 2) {
-        std::vector<unsigned short> subjBuf(subjLen / sizeof(unsigned short));
-        FPDFAnnot_GetStringValue(annot, "Subj",
-                                 reinterpret_cast<FPDF_WCHAR *>(subjBuf.data()),
-                                 subjLen);
-        size_t charCount = subjLen / sizeof(unsigned short) - 1;
-        data.subject = std::u16string(
-            reinterpret_cast<const char16_t *>(subjBuf.data()), charCount);
-      }
-
-      // creation date
-      unsigned long cdLen =
-          FPDFAnnot_GetStringValue(annot, "CreationDate", nullptr, 0);
-      if (cdLen > 2) {
-        std::vector<unsigned short> cdBuf(cdLen / sizeof(unsigned short));
-        FPDFAnnot_GetStringValue(annot, "CreationDate",
-                                 reinterpret_cast<FPDF_WCHAR *>(cdBuf.data()),
-                                 cdLen);
-        size_t charCount = cdLen / sizeof(unsigned short) - 1;
-        data.creationDate = std::u16string(
-            reinterpret_cast<const char16_t *>(cdBuf.data()), charCount);
-      }
-
-      // modification date ("M" key)
-      unsigned long mdLen = FPDFAnnot_GetStringValue(annot, "M", nullptr, 0);
-      if (mdLen > 2) {
-        std::vector<unsigned short> mdBuf(mdLen / sizeof(unsigned short));
-        FPDFAnnot_GetStringValue(
-            annot, "M", reinterpret_cast<FPDF_WCHAR *>(mdBuf.data()), mdLen);
-        size_t charCount = mdLen / sizeof(unsigned short) - 1;
-        data.modDate = std::u16string(
-            reinterpret_cast<const char16_t *>(mdBuf.data()), charCount);
-      }
+      data.author = readAnnotStr("T");
+      data.subject = readAnnotStr("Subj");
+      data.creationDate = readAnnotStr("CreationDate");
+      data.modDate = readAnnotStr("M");
 
       // annotation flags
       data.flags = FPDFAnnot_GetFlags(annot);
@@ -616,14 +541,7 @@ protected:
       if (d.hasBounds)
         obj.Set("bounds",
                 CreateBoundsObject(env, d.left, d.bottom, d.right, d.top));
-      if (d.contents.empty()) {
-        obj.Set("contents", Napi::String::New(env, ""));
-      } else {
-        obj.Set("contents",
-                Napi::String::New(
-                    env, reinterpret_cast<const char16_t *>(d.contents.data()),
-                    d.contents.size()));
-      }
+      SetU16(obj, "contents", env, d.contents);
       if (d.hasColor) {
         obj.Set("color", CreateColorObject(env, d.r, d.g, d.b, d.a));
       } else {
@@ -633,39 +551,10 @@ protected:
         obj.Set("interiorColor",
                 CreateColorObject(env, d.ir, d.ig, d.ib, d.ia));
       }
-      if (d.author.empty()) {
-        obj.Set("author", Napi::String::New(env, ""));
-      } else {
-        obj.Set("author",
-                Napi::String::New(
-                    env, reinterpret_cast<const char16_t *>(d.author.data()),
-                    d.author.size()));
-      }
-      if (d.subject.empty()) {
-        obj.Set("subject", Napi::String::New(env, ""));
-      } else {
-        obj.Set("subject",
-                Napi::String::New(
-                    env, reinterpret_cast<const char16_t *>(d.subject.data()),
-                    d.subject.size()));
-      }
-      if (d.creationDate.empty()) {
-        obj.Set("creationDate", Napi::String::New(env, ""));
-      } else {
-        obj.Set("creationDate",
-                Napi::String::New(
-                    env,
-                    reinterpret_cast<const char16_t *>(d.creationDate.data()),
-                    d.creationDate.size()));
-      }
-      if (d.modDate.empty()) {
-        obj.Set("modDate", Napi::String::New(env, ""));
-      } else {
-        obj.Set("modDate",
-                Napi::String::New(
-                    env, reinterpret_cast<const char16_t *>(d.modDate.data()),
-                    d.modDate.size()));
-      }
+      SetU16(obj, "author", env, d.author);
+      SetU16(obj, "subject", env, d.subject);
+      SetU16(obj, "creationDate", env, d.creationDate);
+      SetU16(obj, "modDate", env, d.modDate);
       obj.Set("flags", Napi::Number::New(env, d.flags));
       if (d.hasBorder) {
         Napi::Object border = Napi::Object::New(env);
@@ -753,10 +642,7 @@ public:
 protected:
   void Execute() override {
     std::lock_guard<std::mutex> lock(g_pdfium_mutex);
-    if (!pageAlive_->load() || (docAlive_ && !docAlive_->load())) {
-      SetError("Page or document was closed");
-      return;
-    }
+    CHECK_ALIVE();
 
     FPDF_PAGEOBJECT obj = FPDFPage_GetObject(page_, index_);
     if (!obj) {
@@ -808,15 +694,13 @@ protected:
     if (type == FPDF_PAGEOBJ_TEXT) {
       FPDF_TEXTPAGE textPage = FPDFText_LoadPage(page_);
       if (textPage) {
-        unsigned long byteLen = FPDFTextObj_GetText(obj, textPage, nullptr, 0);
-        if (byteLen > 0) {
-          size_t charCount = byteLen / sizeof(unsigned short);
-          std::vector<unsigned short> textBuf(charCount);
-          FPDFTextObj_GetText(obj, textPage, textBuf.data(), byteLen);
-          data_.text =
-              std::u16string(reinterpret_cast<const char16_t *>(textBuf.data()),
-                             charCount - 1);
-        }
+        data_.text = ReadU16(
+            [&](auto *, unsigned long) {
+              return FPDFTextObj_GetText(obj, textPage, nullptr, 0);
+            },
+            [&](FPDF_WCHAR *buf, unsigned long len) {
+              return FPDFTextObj_GetText(obj, textPage, buf, len);
+            });
         FPDFText_ClosePage(textPage);
       }
 
@@ -971,14 +855,7 @@ protected:
     }
 
     if (data_.type == "text") {
-      if (data_.text.empty()) {
-        result.Set("text", Napi::String::New(env, ""));
-      } else {
-        result.Set("text", Napi::String::New(env,
-                                             reinterpret_cast<const char16_t *>(
-                                                 data_.text.data()),
-                                             data_.text.size()));
-      }
+      SetU16(result, "text", env, data_.text);
       result.Set("fontSize", Napi::Number::New(env, data_.fontSize));
       result.Set("fontName", Napi::String::New(env, data_.fontName));
       if (data_.fontWeight >= 0)
@@ -1087,14 +964,13 @@ private:
     while (child) {
       BookmarkData data;
 
-      unsigned long titleLen = FPDFBookmark_GetTitle(child, nullptr, 0);
-      if (titleLen > 2) {
-        std::vector<unsigned short> titleBuf(titleLen / sizeof(unsigned short));
-        FPDFBookmark_GetTitle(child, titleBuf.data(), titleLen);
-        size_t charCount = titleLen / sizeof(unsigned short) - 1;
-        data.title = std::u16string(
-            reinterpret_cast<const char16_t *>(titleBuf.data()), charCount);
-      }
+      data.title = ReadU16(
+          [&](auto *, unsigned long) {
+            return FPDFBookmark_GetTitle(child, nullptr, 0);
+          },
+          [&](FPDF_WCHAR *buf, unsigned long len) {
+            return FPDFBookmark_GetTitle(child, buf, len);
+          });
 
       // open/closed state: positive count = open, negative = closed
       int count = FPDFBookmark_GetCount(child);
@@ -1132,23 +1008,7 @@ private:
 
       if (action) {
         unsigned long actionType = FPDFAction_GetType(action);
-        switch (actionType) {
-        case PDFACTION_GOTO:
-          data.actionType = "goto";
-          break;
-        case PDFACTION_REMOTEGOTO:
-          data.actionType = "remoteGoto";
-          break;
-        case PDFACTION_URI:
-          data.actionType = "uri";
-          break;
-        case PDFACTION_LAUNCH:
-          data.actionType = "launch";
-          break;
-        case PDFACTION_EMBEDDEDGOTO:
-          data.actionType = "embeddedGoto";
-          break;
-        }
+        data.actionType = ActionTypeString(actionType);
 
         if (actionType == PDFACTION_URI) {
           unsigned long uriLen =
@@ -1173,14 +1033,7 @@ private:
     for (uint32_t i = 0; i < items.size(); i++) {
       auto &d = items[i];
       Napi::Object obj = Napi::Object::New(env);
-      if (d.title.empty()) {
-        obj.Set("title", Napi::String::New(env, ""));
-      } else {
-        obj.Set("title",
-                Napi::String::New(
-                    env, reinterpret_cast<const char16_t *>(d.title.data()),
-                    d.title.size()));
-      }
+      SetU16(obj, "title", env, d.title);
       if (d.hasPageIndex)
         obj.Set("pageIndex", Napi::Number::New(env, d.pageIndex));
       obj.Set("open", Napi::Boolean::New(env, d.open));
@@ -1238,10 +1091,7 @@ public:
 protected:
   void Execute() override {
     std::lock_guard<std::mutex> lock(g_pdfium_mutex);
-    if (!pageAlive_->load() || (docAlive_ && !docAlive_->load())) {
-      SetError("Page or document was closed");
-      return;
-    }
+    CHECK_ALIVE();
 
     // create a temporary form fill environment for read-only field access
     FPDF_FORMFILLINFO formFillInfo{};
@@ -1296,56 +1146,44 @@ protected:
       }
 
       // field name (UTF-16LE)
-      unsigned long nameLen =
-          FPDFAnnot_GetFormFieldName(formHandle, annot, nullptr, 0);
-      if (nameLen > 2) {
-        std::vector<unsigned short> nameBuf(nameLen / sizeof(unsigned short));
-        FPDFAnnot_GetFormFieldName(
-            formHandle, annot, reinterpret_cast<FPDF_WCHAR *>(nameBuf.data()),
-            nameLen);
-        size_t charCount = nameLen / sizeof(unsigned short) - 1;
-        data.name = std::u16string(
-            reinterpret_cast<const char16_t *>(nameBuf.data()), charCount);
-      }
+      data.name = ReadU16(
+          [&](auto *, unsigned long) {
+            return FPDFAnnot_GetFormFieldName(formHandle, annot, nullptr, 0);
+          },
+          [&](FPDF_WCHAR *buf, unsigned long len) {
+            return FPDFAnnot_GetFormFieldName(formHandle, annot, buf, len);
+          });
 
       // field value (UTF-16LE)
-      unsigned long valueLen =
-          FPDFAnnot_GetFormFieldValue(formHandle, annot, nullptr, 0);
-      if (valueLen > 2) {
-        std::vector<unsigned short> valueBuf(valueLen / sizeof(unsigned short));
-        FPDFAnnot_GetFormFieldValue(
-            formHandle, annot, reinterpret_cast<FPDF_WCHAR *>(valueBuf.data()),
-            valueLen);
-        size_t charCount = valueLen / sizeof(unsigned short) - 1;
-        data.value = std::u16string(
-            reinterpret_cast<const char16_t *>(valueBuf.data()), charCount);
-      }
+      data.value = ReadU16(
+          [&](auto *, unsigned long) {
+            return FPDFAnnot_GetFormFieldValue(formHandle, annot, nullptr, 0);
+          },
+          [&](FPDF_WCHAR *buf, unsigned long len) {
+            return FPDFAnnot_GetFormFieldValue(formHandle, annot, buf, len);
+          });
 
       // alternate name (tooltip)
-      unsigned long altLen =
-          FPDFAnnot_GetFormFieldAlternateName(formHandle, annot, nullptr, 0);
-      if (altLen > 2) {
-        std::vector<unsigned short> altBuf(altLen / sizeof(unsigned short));
-        FPDFAnnot_GetFormFieldAlternateName(
-            formHandle, annot, reinterpret_cast<FPDF_WCHAR *>(altBuf.data()),
-            altLen);
-        size_t charCount = altLen / sizeof(unsigned short) - 1;
-        data.alternateName = std::u16string(
-            reinterpret_cast<const char16_t *>(altBuf.data()), charCount);
-      }
+      data.alternateName = ReadU16(
+          [&](auto *, unsigned long) {
+            return FPDFAnnot_GetFormFieldAlternateName(formHandle, annot,
+                                                       nullptr, 0);
+          },
+          [&](FPDF_WCHAR *buf, unsigned long len) {
+            return FPDFAnnot_GetFormFieldAlternateName(formHandle, annot, buf,
+                                                       len);
+          });
 
       // export value (for checkboxes and radio buttons)
-      unsigned long expLen =
-          FPDFAnnot_GetFormFieldExportValue(formHandle, annot, nullptr, 0);
-      if (expLen > 2) {
-        std::vector<unsigned short> expBuf(expLen / sizeof(unsigned short));
-        FPDFAnnot_GetFormFieldExportValue(
-            formHandle, annot, reinterpret_cast<FPDF_WCHAR *>(expBuf.data()),
-            expLen);
-        size_t charCount = expLen / sizeof(unsigned short) - 1;
-        data.exportValue = std::u16string(
-            reinterpret_cast<const char16_t *>(expBuf.data()), charCount);
-      }
+      data.exportValue = ReadU16(
+          [&](auto *, unsigned long) {
+            return FPDFAnnot_GetFormFieldExportValue(formHandle, annot, nullptr,
+                                                     0);
+          },
+          [&](FPDF_WCHAR *buf, unsigned long len) {
+            return FPDFAnnot_GetFormFieldExportValue(formHandle, annot, buf,
+                                                     len);
+          });
 
       // field flags
       data.flags = FPDFAnnot_GetFormFieldFlags(formHandle, annot);
@@ -1368,18 +1206,15 @@ protected:
         data.isChecked = !data.value.empty() && data.value != off;
       } else if (fieldType == FPDF_FORMFIELD_RADIOBUTTON) {
         // radio is checked when its appearance state (/AS) is not "Off"
-        // (FPDFAnnot_GetFormFieldExportValue requires FORM_OnAfterLoadPage)
         static const std::u16string off = u"Off";
-        unsigned long asLen = FPDFAnnot_GetStringValue(annot, "AS", nullptr, 0);
-        if (asLen > 2) {
-          std::vector<unsigned short> asBuf(asLen / sizeof(unsigned short));
-          FPDFAnnot_GetStringValue(
-              annot, "AS", reinterpret_cast<FPDF_WCHAR *>(asBuf.data()), asLen);
-          size_t charCount = asLen / sizeof(unsigned short) - 1;
-          std::u16string as(reinterpret_cast<const char16_t *>(asBuf.data()),
-                            charCount);
-          data.isChecked = !as.empty() && as != off;
-        }
+        std::u16string as = ReadU16(
+            [&](auto *, unsigned long) {
+              return FPDFAnnot_GetStringValue(annot, "AS", nullptr, 0);
+            },
+            [&](FPDF_WCHAR *buf, unsigned long len) {
+              return FPDFAnnot_GetStringValue(annot, "AS", buf, len);
+            });
+        data.isChecked = !as.empty() && as != off;
       }
 
       // options (combo box / list box)
@@ -1387,17 +1222,14 @@ protected:
       if (optCount > 0) {
         for (int j = 0; j < optCount; j++) {
           FormFieldOptionData opt;
-          unsigned long optLen =
-              FPDFAnnot_GetOptionLabel(formHandle, annot, j, nullptr, 0);
-          if (optLen > 2) {
-            std::vector<unsigned short> optBuf(optLen / sizeof(unsigned short));
-            FPDFAnnot_GetOptionLabel(
-                formHandle, annot, j,
-                reinterpret_cast<FPDF_WCHAR *>(optBuf.data()), optLen);
-            size_t charCount = optLen / sizeof(unsigned short) - 1;
-            opt.label = std::u16string(
-                reinterpret_cast<const char16_t *>(optBuf.data()), charCount);
-          }
+          opt.label = ReadU16(
+              [&](auto *, unsigned long) {
+                return FPDFAnnot_GetOptionLabel(formHandle, annot, j, nullptr,
+                                                0);
+              },
+              [&](FPDF_WCHAR *buf, unsigned long len) {
+                return FPDFAnnot_GetOptionLabel(formHandle, annot, j, buf, len);
+              });
           opt.isSelected =
               FPDFAnnot_IsOptionSelected(formHandle, annot, j) != 0;
           data.options.push_back(std::move(opt));
@@ -1418,41 +1250,10 @@ protected:
       auto &d = fields_[i];
       Napi::Object obj = Napi::Object::New(env);
       obj.Set("type", Napi::String::New(env, d.type));
-
-      if (d.name.empty()) {
-        obj.Set("name", Napi::String::New(env, ""));
-      } else {
-        obj.Set("name",
-                Napi::String::New(
-                    env, reinterpret_cast<const char16_t *>(d.name.data()),
-                    d.name.size()));
-      }
-
-      if (d.value.empty()) {
-        obj.Set("value", Napi::String::New(env, ""));
-      } else {
-        obj.Set("value",
-                Napi::String::New(
-                    env, reinterpret_cast<const char16_t *>(d.value.data()),
-                    d.value.size()));
-      }
-
-      if (!d.alternateName.empty()) {
-        obj.Set("alternateName",
-                Napi::String::New(
-                    env,
-                    reinterpret_cast<const char16_t *>(d.alternateName.data()),
-                    d.alternateName.size()));
-      }
-
-      if (!d.exportValue.empty()) {
-        obj.Set("exportValue",
-                Napi::String::New(
-                    env,
-                    reinterpret_cast<const char16_t *>(d.exportValue.data()),
-                    d.exportValue.size()));
-      }
-
+      SetU16(obj, "name", env, d.name);
+      SetU16(obj, "value", env, d.value);
+      SetU16IfPresent(obj, "alternateName", env, d.alternateName);
+      SetU16IfPresent(obj, "exportValue", env, d.exportValue);
       obj.Set("flags", Napi::Number::New(env, d.flags));
 
       if (d.hasBounds)
@@ -1466,15 +1267,7 @@ protected:
         for (uint32_t j = 0; j < d.options.size(); j++) {
           auto &opt = d.options[j];
           Napi::Object optObj = Napi::Object::New(env);
-          if (opt.label.empty()) {
-            optObj.Set("label", Napi::String::New(env, ""));
-          } else {
-            optObj.Set("label",
-                       Napi::String::New(
-                           env,
-                           reinterpret_cast<const char16_t *>(opt.label.data()),
-                           opt.label.size()));
-          }
+          SetU16(optObj, "label", env, opt.label);
           optObj.Set("isSelected", Napi::Boolean::New(env, opt.isSelected));
           optArr.Set(j, optObj);
         }

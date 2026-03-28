@@ -90,14 +90,13 @@ protected:
     const char *metaTags[] = {"Title",   "Author",   "Subject",      "Keywords",
                               "Creator", "Producer", "CreationDate", "ModDate"};
     for (int i = 0; i < 8; i++) {
-      unsigned long len = FPDF_GetMetaText(doc_, metaTags[i], nullptr, 0);
-      if (len > 2) {
-        std::vector<unsigned short> buf(len / sizeof(unsigned short));
-        FPDF_GetMetaText(doc_, metaTags[i], buf.data(), len);
-        size_t charCount = len / sizeof(unsigned short) - 1;
-        meta_[i] = std::u16string(
-            reinterpret_cast<const char16_t *>(buf.data()), charCount);
-      }
+      meta_[i] = ReadU16(
+          [&](auto *, unsigned long) {
+            return FPDF_GetMetaText(doc_, metaTags[i], nullptr, 0);
+          },
+          [&](FPDF_WCHAR *buf, unsigned long len) {
+            return FPDF_GetMetaText(doc_, metaTags[i], buf, len);
+          });
     }
     FPDF_GetFileVersion(doc_, &pdfVersion_);
     permissions_ = FPDF_GetDocPermissions(doc_);
@@ -106,15 +105,13 @@ protected:
     isTagged_ = FPDFCatalog_IsTagged(doc_) != 0;
 
     // document language (UTF-16LE encoded)
-    unsigned long langLen = FPDFCatalog_GetLanguage(doc_, nullptr, 0);
-    if (langLen > 2) {
-      std::vector<unsigned short> langBuf(langLen / sizeof(unsigned short));
-      FPDFCatalog_GetLanguage(
-          doc_, reinterpret_cast<FPDF_WCHAR *>(langBuf.data()), langLen);
-      size_t charCount = langLen / sizeof(unsigned short) - 1;
-      language_ = std::u16string(
-          reinterpret_cast<const char16_t *>(langBuf.data()), charCount);
-    }
+    language_ = ReadU16(
+        [&](auto *, unsigned long) {
+          return FPDFCatalog_GetLanguage(doc_, nullptr, 0);
+        },
+        [&](FPDF_WCHAR *buf, unsigned long len) {
+          return FPDFCatalog_GetLanguage(doc_, buf, len);
+        });
 
     // signature and attachment counts
     signatureCount_ = FPDF_GetSignatureCount(doc_);
@@ -155,15 +152,7 @@ protected:
                               "creator", "producer", "creationDate", "modDate"};
     Napi::Object metaObj = Napi::Object::New(env);
     for (int i = 0; i < 8; i++) {
-      if (meta_[i].empty()) {
-        metaObj.Set(metaKeys[i], Napi::String::New(env, ""));
-      } else {
-        metaObj.Set(metaKeys[i],
-                    Napi::String::New(
-                        env,
-                        reinterpret_cast<const char16_t *>(meta_[i].data()),
-                        meta_[i].size()));
-      }
+      SetU16(metaObj, metaKeys[i], env, meta_[i]);
     }
     metaObj.Set("pdfVersion", Napi::Number::New(env, pdfVersion_));
 
@@ -188,14 +177,7 @@ protected:
     metaObj.Set("permissions", permObj);
 
     metaObj.Set("isTagged", Napi::Boolean::New(env, isTagged_));
-    if (language_.empty()) {
-      metaObj.Set("language", Napi::String::New(env, ""));
-    } else {
-      metaObj.Set("language",
-                  Napi::String::New(
-                      env, reinterpret_cast<const char16_t *>(language_.data()),
-                      language_.size()));
-    }
+    SetU16(metaObj, "language", env, language_);
     metaObj.Set("signatureCount", Napi::Number::New(env, signatureCount_));
     metaObj.Set("attachmentCount", Napi::Number::New(env, attachmentCount_));
     if (!permanentId_.empty())
