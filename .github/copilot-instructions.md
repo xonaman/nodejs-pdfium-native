@@ -5,7 +5,7 @@
 **Type**: Native C++ Node.js addon providing PDFium bindings  
 **Languages**: C++ (N-API addon), TypeScript (ESM wrapper + types)  
 **PDFium**: bblanchon/pdfium-binaries (chromium/7749, prebuilt shared libraries)  
-**Package**: `@xonaman/pdfium-native`, scoped to GitHub Packages  
+**Package**: `pdfium-native`, published to npmjs  
 **Size**: Single C++ source (~1100 lines), single TS wrapper (~300 lines), 38 tests
 
 Trust these instructions. Only perform additional exploration if information is incomplete.

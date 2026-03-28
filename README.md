@@ -24,7 +24,7 @@ Prebuilt PDFium binaries are downloaded automatically during install. A C++ comp
 ## Quick Start
 
 ```typescript
-import { loadDocument } from '@xonaman/pdfium-native';
+import { loadDocument } from 'pdfium-native';
 
 const doc = await loadDocument('invoice.pdf');
 const page = await doc.getPage(0);

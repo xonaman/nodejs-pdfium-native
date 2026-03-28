@@ -1,4 +1,4 @@
-import { loadDocument, PDFiumPasswordError } from '@xonaman/pdfium-native';
+import { loadDocument, PDFiumPasswordError } from 'pdfium-native';
 
 const doc = await loadDocument('report.pdf');
 const page = await doc.getPage(0);

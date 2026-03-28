@@ -1,4 +1,4 @@
-import { loadDocument } from '@xonaman/pdfium-native';
+import { loadDocument } from 'pdfium-native';
 
 // open from file path or Buffer
 const doc = await loadDocument('invoice.pdf');

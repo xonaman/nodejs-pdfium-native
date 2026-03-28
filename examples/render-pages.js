@@ -1,4 +1,4 @@
-import { loadDocument } from '@xonaman/pdfium-native';
+import { loadDocument } from 'pdfium-native';
 
 const doc = await loadDocument('document.pdf');
 const page = await doc.getPage(0);
