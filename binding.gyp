@@ -4,7 +4,7 @@
       "target_name": "pdfium",
       "sources": [
         "src/pdfium_addon.cc",
-        "src/stb_image_write.c"
+        "src/stb_image_write.cc"
       ],
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")",
