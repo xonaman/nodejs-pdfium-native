@@ -1,6 +1,6 @@
 {
   "name": "pdfium-native",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Native Node.js bindings for PDFium",
   "license": "MIT",
   "type": "module",
@@ -68,6 +68,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/node": "^25.5.0",
     "eslint": "^10.1.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
