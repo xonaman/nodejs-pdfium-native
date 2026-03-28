@@ -166,6 +166,10 @@ interface PageRenderOptions {
   format?: 'jpeg' | 'png'; // default: 'jpeg'
   quality?: number; // JPEG quality 1–100 (default: 100)
   output?: string; // write to file instead of returning a Buffer
+  rotation?: 0 | 1 | 2 | 3; // 0=none, 1=90° CW, 2=180°, 3=270° CW
+  transparent?: boolean; // transparent background (PNG only, default: false)
+  renderAnnotations?: boolean; // render annotations (default: true)
+  grayscale?: boolean; // render in grayscale
 }
 ```
 
@@ -195,6 +199,10 @@ interface Link {
   bounds?: { left; bottom; right; top };
   url?: string; // external URL
   pageIndex?: number; // internal link target
+  actionType?: 'goto' | 'remoteGoto' | 'uri' | 'launch' | 'embeddedGoto' | 'unknown';
+  destX?: number; // destination X coordinate
+  destY?: number; // destination Y coordinate
+  destZoom?: number; // destination zoom level
 }
 ```
 
@@ -217,6 +225,11 @@ interface Annotation {
   bounds?: { left; bottom; right; top };
   contents: string;
   color: { r; g; b; a } | null;
+  author: string; // annotation author
+  subject: string; // annotation subject
+  creationDate: string; // PDF date string (e.g. "D:20250101120000Z")
+  modDate: string; // modification date
+  flags: number; // annotation flags bitmask (PDF spec Table 165)
 }
 ```
 
@@ -239,6 +252,16 @@ interface DocumentMetadata {
   creationDate: string;
   modDate: string;
   pdfVersion: number; // e.g. 17 for PDF 1.7
+  permissions: {
+    print: boolean;
+    modify: boolean;
+    copy: boolean;
+    annotate: boolean;
+    fillForms: boolean;
+    extractForAccessibility: boolean;
+    assemble: boolean;
+    printHighQuality: boolean;
+  };
 }
 ```
 

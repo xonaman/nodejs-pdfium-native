@@ -202,10 +202,38 @@ async function createTextPdf() {
   return doc.save();
 }
 
+// --- PDF with rich annotation metadata (author, subject, dates, flags) ---
+async function createRichAnnotationPdf() {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([612, 792]);
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  page.drawText('Page with rich annotations', { x: 50, y: 700, size: 16, font });
+
+  const { PDFName, PDFString, PDFHexString } = await import('pdf-lib');
+
+  const annot = doc.context.obj({
+    Type: 'Annot',
+    Subtype: 'Text',
+    Rect: [100, 600, 120, 620],
+    Contents: PDFHexString.fromText('Test note'),
+    T: PDFHexString.fromText('John Doe'),
+    Subj: PDFHexString.fromText('Review Comment'),
+    CreationDate: PDFString.of('D:20250101120000Z'),
+    M: PDFString.of('D:20250102120000Z'),
+    C: [1, 0, 0],
+    F: 4, // print flag
+  });
+  const annotRef = doc.context.register(annot);
+
+  page.node.set(PDFName.of('Annots'), doc.context.obj([annotRef]));
+  return doc.save();
+}
+
 // Generate all fixtures
 const fixtures = [
   ['metadata.pdf', createMetadataPdf],
   ['annotations.pdf', createAnnotationPdf],
+  ['rich-annotations.pdf', createRichAnnotationPdf],
   ['links.pdf', createLinkPdf],
   ['bookmarks.pdf', createBookmarkPdf],
   ['minimal.pdf', createMinimalPdf],

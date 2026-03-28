@@ -116,6 +116,9 @@ private:
     int renderHeight = 0;
     int format = IMAGE_FORMAT_JPEG;
     int quality = 100;
+    int rotation = 0;
+    bool transparent = false;
+    int renderFlags = FPDF_ANNOT | FPDF_PRINTING;
 
     std::string outputPath;
 
@@ -142,6 +145,22 @@ private:
         quality = opts.Get("quality").As<Napi::Number>().Int32Value();
       if (opts.Has("output"))
         outputPath = opts.Get("output").As<Napi::String>().Utf8Value();
+      if (opts.Has("rotation")) {
+        rotation = opts.Get("rotation").As<Napi::Number>().Int32Value();
+        if (rotation != 0 && rotation != 1 && rotation != 2 && rotation != 3) {
+          Napi::RangeError::New(env, "rotation must be 0, 1, 2, or 3")
+              .ThrowAsJavaScriptException();
+          return env.Null();
+        }
+      }
+      if (opts.Has("transparent"))
+        transparent = opts.Get("transparent").As<Napi::Boolean>().Value();
+      if (opts.Has("renderAnnotations") &&
+          !opts.Get("renderAnnotations").As<Napi::Boolean>().Value())
+        renderFlags &= ~FPDF_ANNOT;
+      if (opts.Has("grayscale") &&
+          opts.Get("grayscale").As<Napi::Boolean>().Value())
+        renderFlags |= FPDF_GRAYSCALE;
     }
 
     if (renderWidth == 0)
@@ -166,9 +185,9 @@ private:
     // clamp quality to valid range
     quality = std::clamp(quality, 1, 100);
 
-    auto *worker =
-        new RenderWorker(env, page_, renderWidth, renderHeight, format, quality,
-                         std::move(outputPath), alive_);
+    auto *worker = new RenderWorker(env, page_, renderWidth, renderHeight,
+                                    format, quality, std::move(outputPath),
+                                    rotation, transparent, renderFlags, alive_);
     auto promise = worker->Promise();
     worker->Queue();
     return promise;

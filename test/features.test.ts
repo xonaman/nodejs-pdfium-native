@@ -32,6 +32,7 @@ describe('PDFiumPage.getLinks', () => {
     expect(externalLink).toBeDefined();
     expect(externalLink!.url).toBe('https://example.com');
     expect(externalLink!.bounds).toBeDefined();
+    expect(externalLink!.actionType).toBe('uri');
 
     page.close();
     doc.destroy();
@@ -67,6 +68,25 @@ describe('PDFiumPage.getAnnotations', () => {
     expect(highlightAnnot).toBeDefined();
     expect(highlightAnnot!.contents).toBe('Highlighted text');
     expect(highlightAnnot!.bounds).toBeDefined();
+
+    page.close();
+    doc.destroy();
+  });
+
+  it('returns annotation metadata (author, subject, dates, flags)', async () => {
+    const doc = await loadDocument(fixture('rich-annotations.pdf'));
+    const page = await doc.getPage(0);
+    const annotations = await page.getAnnotations();
+    expect(annotations.length).toBe(1);
+
+    const annot = annotations[0]!;
+    expect(annot.type).toBe('text');
+    expect(annot.contents).toBe('Test note');
+    expect(annot.author).toBe('John Doe');
+    expect(annot.subject).toBe('Review Comment');
+    expect(annot.creationDate).toBe('D:20250101120000Z');
+    expect(annot.modDate).toBe('D:20250102120000Z');
+    expect(annot.flags).toBe(4); // print flag
 
     page.close();
     doc.destroy();

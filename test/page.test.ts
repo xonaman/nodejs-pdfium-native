@@ -74,6 +74,8 @@ describe('PDFiumPage', () => {
         expect(o.text).toBe('Hello');
         expect(o.fontSize).toBeCloseTo(12, 0);
         expect(o.fontName).toBe('Helvetica');
+        expect(typeof o.fontWeight).toBe('number');
+        expect(typeof o.italicAngle).toBe('number');
         break;
       }
     }

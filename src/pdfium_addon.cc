@@ -96,6 +96,7 @@ protected:
       }
     }
     FPDF_GetFileVersion(doc_, &pdfVersion_);
+    permissions_ = FPDF_GetDocPermissions(doc_);
   }
 
   void OnOK() override {
@@ -122,6 +123,26 @@ protected:
       }
     }
     metaObj.Set("pdfVersion", Napi::Number::New(env, pdfVersion_));
+
+    // permission flags (ISO 32000-1:2008, Table 22)
+    Napi::Object permObj = Napi::Object::New(env);
+    permObj.Set("print",
+                Napi::Boolean::New(env, (permissions_ & (1 << 2)) != 0));
+    permObj.Set("modify",
+                Napi::Boolean::New(env, (permissions_ & (1 << 3)) != 0));
+    permObj.Set("copy",
+                Napi::Boolean::New(env, (permissions_ & (1 << 4)) != 0));
+    permObj.Set("annotate",
+                Napi::Boolean::New(env, (permissions_ & (1 << 5)) != 0));
+    permObj.Set("fillForms",
+                Napi::Boolean::New(env, (permissions_ & (1 << 8)) != 0));
+    permObj.Set("extractForAccessibility",
+                Napi::Boolean::New(env, (permissions_ & (1 << 9)) != 0));
+    permObj.Set("assemble",
+                Napi::Boolean::New(env, (permissions_ & (1 << 10)) != 0));
+    permObj.Set("printHighQuality",
+                Napi::Boolean::New(env, (permissions_ & (1 << 11)) != 0));
+    metaObj.Set("permissions", permObj);
     docObj.Set("metadata", metaObj);
 
     // for buffer variant, transfer ownership of the copied data
@@ -147,6 +168,7 @@ private:
   int pageCount_ = 0;
   std::u16string meta_[8];
   int pdfVersion_ = 0;
+  unsigned long permissions_ = 0xFFFFFFFF;
 };
 
 /**

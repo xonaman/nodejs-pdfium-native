@@ -16,6 +16,14 @@ export interface PageRenderOptions {
   quality?: number;
   /** Write to this file path instead of returning a Buffer. */
   output?: string;
+  /** Page rotation: 0 = none, 1 = 90° CW, 2 = 180°, 3 = 270° CW. */
+  rotation?: 0 | 1 | 2 | 3;
+  /** Render with transparent background instead of white (PNG only). */
+  transparent?: boolean;
+  /** Whether to render annotations (default: true). */
+  renderAnnotations?: boolean;
+  /** Render in grayscale. */
+  grayscale?: boolean;
 }
 
 export interface PageObjectBounds {
@@ -43,6 +51,10 @@ export interface TextPageObject extends BasePageObject {
   text: string;
   fontSize: number;
   fontName: string;
+  /** Font weight (e.g. 400 = normal, 700 = bold). Absent if unavailable. */
+  fontWeight?: number;
+  /** Italic angle in degrees counterclockwise from vertical. Negative means right-sloping. */
+  italicAngle?: number;
 }
 
 export interface ImagePageObject extends BasePageObject {
@@ -99,18 +111,49 @@ export interface Annotation {
   bounds?: PageObjectBounds;
   contents: string;
   color: RGBA | null;
+  /** Author of the annotation. */
+  author: string;
+  /** Subject of the annotation. */
+  subject: string;
+  /** Creation date as a PDF date string (e.g. "D:20250328..."). */
+  creationDate: string;
+  /** Modification date as a PDF date string. */
+  modDate: string;
+  /** Raw annotation flags bitmask (see PDF spec Table 165). */
+  flags: number;
 }
+
+export type LinkActionType = 'goto' | 'remoteGoto' | 'uri' | 'launch' | 'embeddedGoto' | 'unknown';
 
 export interface Link {
   bounds?: PageObjectBounds;
   url?: string;
   pageIndex?: number;
+  /** The type of action this link performs. */
+  actionType?: LinkActionType;
+  /** Destination X coordinate (for internal links). */
+  destX?: number;
+  /** Destination Y coordinate (for internal links). */
+  destY?: number;
+  /** Destination zoom level (for internal links). */
+  destZoom?: number;
 }
 
 export interface Bookmark {
   title: string;
   pageIndex?: number;
   children?: Bookmark[];
+}
+
+export interface DocumentPermissions {
+  print: boolean;
+  modify: boolean;
+  copy: boolean;
+  annotate: boolean;
+  fillForms: boolean;
+  extractForAccessibility: boolean;
+  assemble: boolean;
+  printHighQuality: boolean;
 }
 
 export interface DocumentMetadata {
@@ -123,6 +166,8 @@ export interface DocumentMetadata {
   creationDate: string;
   modDate: string;
   pdfVersion: number;
+  /** Document permission flags. All true if unprotected. */
+  permissions: DocumentPermissions;
 }
 
 // native addon bindings (internal)

@@ -23,12 +23,14 @@ inline void stb_write_callback(void *context, void *data, int size) {
 class RenderWorker : public Napi::AsyncWorker {
 public:
   RenderWorker(Napi::Env env, FPDF_PAGE page, int renderWidth, int renderHeight,
-               int format, int quality, std::string outputPath,
+               int format, int quality, std::string outputPath, int rotation,
+               bool transparent, int renderFlags,
                std::shared_ptr<std::atomic<bool>> pageAlive)
       : Napi::AsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
         page_(page), renderWidth_(renderWidth), renderHeight_(renderHeight),
         format_(format), quality_(quality), outputPath_(std::move(outputPath)),
-        pageAlive_(std::move(pageAlive)) {}
+        rotation_(rotation), transparent_(transparent),
+        renderFlags_(renderFlags), pageAlive_(std::move(pageAlive)) {}
 
   Napi::Promise Promise() { return deferred_.Promise(); }
 
@@ -42,30 +44,38 @@ protected:
       return;
     }
 
-    FPDF_BITMAP bitmap = FPDFBitmap_Create(renderWidth_, renderHeight_, 0);
+    FPDF_BITMAP bitmap =
+        FPDFBitmap_Create(renderWidth_, renderHeight_, transparent_ ? 1 : 0);
     if (!bitmap) {
       SetError("Failed to create bitmap");
       return;
     }
 
-    FPDFBitmap_FillRect(bitmap, 0, 0, renderWidth_, renderHeight_, 0xFFFFFFFF);
-    FPDF_RenderPageBitmap(bitmap, page_, 0, 0, renderWidth_, renderHeight_, 0,
-                          FPDF_ANNOT | FPDF_PRINTING);
+    if (!transparent_) {
+      FPDFBitmap_FillRect(bitmap, 0, 0, renderWidth_, renderHeight_,
+                          0xFFFFFFFF);
+    }
+    FPDF_RenderPageBitmap(bitmap, page_, 0, 0, renderWidth_, renderHeight_,
+                          rotation_, renderFlags_);
 
-    // convert BGRA → RGB for stb (which expects RGB)
+    int channels = transparent_ ? 4 : 3;
+
+    // convert BGRA → RGB or BGRA → RGBA for stb
     void *bufferData = FPDFBitmap_GetBuffer(bitmap);
     int stride = FPDFBitmap_GetStride(bitmap);
-    std::vector<uint8_t> rgb(static_cast<size_t>(renderWidth_) * renderHeight_ *
-                             3);
+    std::vector<uint8_t> pixels(static_cast<size_t>(renderWidth_) *
+                                renderHeight_ * channels);
 
     for (int y = 0; y < renderHeight_; y++) {
       auto *row = static_cast<uint8_t *>(bufferData) + y * stride;
       for (int x = 0; x < renderWidth_; x++) {
         int srcIdx = x * 4;
-        int dstIdx = (y * renderWidth_ + x) * 3;
-        rgb[dstIdx + 0] = row[srcIdx + 2]; // R ← BGRA[2]
-        rgb[dstIdx + 1] = row[srcIdx + 1]; // G ← BGRA[1]
-        rgb[dstIdx + 2] = row[srcIdx + 0]; // B ← BGRA[0]
+        int dstIdx = (y * renderWidth_ + x) * channels;
+        pixels[dstIdx + 0] = row[srcIdx + 2]; // R ← BGRA[2]
+        pixels[dstIdx + 1] = row[srcIdx + 1]; // G ← BGRA[1]
+        pixels[dstIdx + 2] = row[srcIdx + 0]; // B ← BGRA[0]
+        if (transparent_)
+          pixels[dstIdx + 3] = row[srcIdx + 3]; // A ← BGRA[3]
       }
     }
 
@@ -75,12 +85,12 @@ protected:
     int ok;
     if (format_ == IMAGE_FORMAT_PNG) {
       ok = stbi_write_png_to_func(stb_write_callback, &encodedData_,
-                                  renderWidth_, renderHeight_, 3, rgb.data(),
-                                  renderWidth_ * 3);
+                                  renderWidth_, renderHeight_, channels,
+                                  pixels.data(), renderWidth_ * channels);
     } else {
       ok = stbi_write_jpg_to_func(stb_write_callback, &encodedData_,
-                                  renderWidth_, renderHeight_, 3, rgb.data(),
-                                  quality_);
+                                  renderWidth_, renderHeight_, channels,
+                                  pixels.data(), quality_);
     }
 
     if (!ok) {
@@ -136,6 +146,9 @@ private:
   int format_;
   int quality_;
   std::string outputPath_;
+  int rotation_;
+  bool transparent_;
+  int renderFlags_;
   std::vector<uint8_t> encodedData_;
   std::shared_ptr<std::atomic<bool>> pageAlive_;
 };

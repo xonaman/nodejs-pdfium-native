@@ -180,6 +180,10 @@ struct LinkData {
   std::string url;
   int pageIndex = -1;
   bool hasPageIndex = false;
+  std::string actionType;
+  // destination location
+  float destX = 0, destY = 0, destZoom = 0;
+  bool hasDestX = false, hasDestY = false, hasDestZoom = false;
 };
 
 class GetLinksWorker : public Napi::AsyncWorker {
@@ -216,12 +220,36 @@ protected:
       }
 
       FPDF_ACTION action = FPDFLink_GetAction(link);
-      if (action && FPDFAction_GetType(action) == PDFACTION_URI) {
-        unsigned long len = FPDFAction_GetURIPath(doc_, action, nullptr, 0);
-        if (len > 0) {
-          std::vector<char> buf(len);
-          FPDFAction_GetURIPath(doc_, action, buf.data(), len);
-          data.url = std::string(buf.data(), len - 1);
+      if (action) {
+        unsigned long actionType = FPDFAction_GetType(action);
+        switch (actionType) {
+        case PDFACTION_GOTO:
+          data.actionType = "goto";
+          break;
+        case PDFACTION_REMOTEGOTO:
+          data.actionType = "remoteGoto";
+          break;
+        case PDFACTION_URI:
+          data.actionType = "uri";
+          break;
+        case PDFACTION_LAUNCH:
+          data.actionType = "launch";
+          break;
+        case PDFACTION_EMBEDDEDGOTO:
+          data.actionType = "embeddedGoto";
+          break;
+        default:
+          data.actionType = "unknown";
+          break;
+        }
+
+        if (actionType == PDFACTION_URI) {
+          unsigned long len = FPDFAction_GetURIPath(doc_, action, nullptr, 0);
+          if (len > 0) {
+            std::vector<char> buf(len);
+            FPDFAction_GetURIPath(doc_, action, buf.data(), len);
+            data.url = std::string(buf.data(), len - 1);
+          }
         }
       }
 
@@ -234,6 +262,24 @@ protected:
         if (idx >= 0) {
           data.hasPageIndex = true;
           data.pageIndex = idx;
+        }
+
+        FPDF_BOOL hasX, hasY, hasZoom;
+        FS_FLOAT x, y, zoom;
+        if (FPDFDest_GetLocationInPage(dest, &hasX, &hasY, &hasZoom, &x, &y,
+                                       &zoom)) {
+          if (hasX) {
+            data.hasDestX = true;
+            data.destX = x;
+          }
+          if (hasY) {
+            data.hasDestY = true;
+            data.destY = y;
+          }
+          if (hasZoom) {
+            data.hasDestZoom = true;
+            data.destZoom = zoom;
+          }
         }
       }
 
@@ -254,6 +300,14 @@ protected:
         obj.Set("url", Napi::String::New(env, d.url));
       if (d.hasPageIndex)
         obj.Set("pageIndex", Napi::Number::New(env, d.pageIndex));
+      if (!d.actionType.empty())
+        obj.Set("actionType", Napi::String::New(env, d.actionType));
+      if (d.hasDestX)
+        obj.Set("destX", Napi::Number::New(env, d.destX));
+      if (d.hasDestY)
+        obj.Set("destY", Napi::Number::New(env, d.destY));
+      if (d.hasDestZoom)
+        obj.Set("destZoom", Napi::Number::New(env, d.destZoom));
       arr.Set(i, obj);
     }
     deferred_.Resolve(arr);
@@ -283,6 +337,11 @@ struct AnnotationData {
   std::u16string contents;
   unsigned int r = 0, g = 0, b = 0, a = 0;
   bool hasColor = false;
+  std::u16string author;
+  std::u16string subject;
+  std::u16string creationDate;
+  std::u16string modDate;
+  int flags = 0;
 };
 
 class GetAnnotationsWorker : public Napi::AsyncWorker {
@@ -396,6 +455,60 @@ protected:
         data.a = ca;
       }
 
+      // author ("T" key in PDF spec)
+      unsigned long authorLen =
+          FPDFAnnot_GetStringValue(annot, "T", nullptr, 0);
+      if (authorLen > 2) {
+        std::vector<unsigned short> authorBuf(authorLen /
+                                              sizeof(unsigned short));
+        FPDFAnnot_GetStringValue(
+            annot, "T", reinterpret_cast<FPDF_WCHAR *>(authorBuf.data()),
+            authorLen);
+        size_t charCount = authorLen / sizeof(unsigned short) - 1;
+        data.author = std::u16string(
+            reinterpret_cast<const char16_t *>(authorBuf.data()), charCount);
+      }
+
+      // subject ("Subj" key)
+      unsigned long subjLen =
+          FPDFAnnot_GetStringValue(annot, "Subj", nullptr, 0);
+      if (subjLen > 2) {
+        std::vector<unsigned short> subjBuf(subjLen / sizeof(unsigned short));
+        FPDFAnnot_GetStringValue(annot, "Subj",
+                                 reinterpret_cast<FPDF_WCHAR *>(subjBuf.data()),
+                                 subjLen);
+        size_t charCount = subjLen / sizeof(unsigned short) - 1;
+        data.subject = std::u16string(
+            reinterpret_cast<const char16_t *>(subjBuf.data()), charCount);
+      }
+
+      // creation date
+      unsigned long cdLen =
+          FPDFAnnot_GetStringValue(annot, "CreationDate", nullptr, 0);
+      if (cdLen > 2) {
+        std::vector<unsigned short> cdBuf(cdLen / sizeof(unsigned short));
+        FPDFAnnot_GetStringValue(annot, "CreationDate",
+                                 reinterpret_cast<FPDF_WCHAR *>(cdBuf.data()),
+                                 cdLen);
+        size_t charCount = cdLen / sizeof(unsigned short) - 1;
+        data.creationDate = std::u16string(
+            reinterpret_cast<const char16_t *>(cdBuf.data()), charCount);
+      }
+
+      // modification date ("M" key)
+      unsigned long mdLen = FPDFAnnot_GetStringValue(annot, "M", nullptr, 0);
+      if (mdLen > 2) {
+        std::vector<unsigned short> mdBuf(mdLen / sizeof(unsigned short));
+        FPDFAnnot_GetStringValue(
+            annot, "M", reinterpret_cast<FPDF_WCHAR *>(mdBuf.data()), mdLen);
+        size_t charCount = mdLen / sizeof(unsigned short) - 1;
+        data.modDate = std::u16string(
+            reinterpret_cast<const char16_t *>(mdBuf.data()), charCount);
+      }
+
+      // annotation flags
+      data.flags = FPDFAnnot_GetFlags(annot);
+
       annotations_.push_back(std::move(data));
       FPDFPage_CloseAnnot(annot);
     }
@@ -424,6 +537,40 @@ protected:
       } else {
         obj.Set("color", env.Null());
       }
+      if (d.author.empty()) {
+        obj.Set("author", Napi::String::New(env, ""));
+      } else {
+        obj.Set("author",
+                Napi::String::New(
+                    env, reinterpret_cast<const char16_t *>(d.author.data()),
+                    d.author.size()));
+      }
+      if (d.subject.empty()) {
+        obj.Set("subject", Napi::String::New(env, ""));
+      } else {
+        obj.Set("subject",
+                Napi::String::New(
+                    env, reinterpret_cast<const char16_t *>(d.subject.data()),
+                    d.subject.size()));
+      }
+      if (d.creationDate.empty()) {
+        obj.Set("creationDate", Napi::String::New(env, ""));
+      } else {
+        obj.Set("creationDate",
+                Napi::String::New(
+                    env,
+                    reinterpret_cast<const char16_t *>(d.creationDate.data()),
+                    d.creationDate.size()));
+      }
+      if (d.modDate.empty()) {
+        obj.Set("modDate", Napi::String::New(env, ""));
+      } else {
+        obj.Set("modDate",
+                Napi::String::New(
+                    env, reinterpret_cast<const char16_t *>(d.modDate.data()),
+                    d.modDate.size()));
+      }
+      obj.Set("flags", Napi::Number::New(env, d.flags));
       arr.Set(i, obj);
     }
     deferred_.Resolve(arr);
@@ -456,6 +603,9 @@ struct PageObjectData {
   std::u16string text;
   float fontSize = 0;
   std::string fontName;
+  int fontWeight = -1;
+  int italicAngle = 0;
+  bool hasItalicAngle = false;
   // image-specific
   unsigned int imageWidth = 0, imageHeight = 0;
 };
@@ -553,6 +703,12 @@ protected:
           FPDFFont_GetBaseFontName(font, nameBuf.data(), nameLen);
           data_.fontName = std::string(nameBuf.data(), nameLen - 1);
         }
+        data_.fontWeight = FPDFFont_GetWeight(font);
+        int angle = 0;
+        if (FPDFFont_GetItalicAngle(font, &angle)) {
+          data_.hasItalicAngle = true;
+          data_.italicAngle = angle;
+        }
       }
     }
 
@@ -595,6 +751,10 @@ protected:
       }
       result.Set("fontSize", Napi::Number::New(env, data_.fontSize));
       result.Set("fontName", Napi::String::New(env, data_.fontName));
+      if (data_.fontWeight >= 0)
+        result.Set("fontWeight", Napi::Number::New(env, data_.fontWeight));
+      if (data_.hasItalicAngle)
+        result.Set("italicAngle", Napi::Number::New(env, data_.italicAngle));
     }
 
     if (data_.type == "image") {

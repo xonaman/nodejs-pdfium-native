@@ -64,6 +64,40 @@ describe('PDFiumPage.render', () => {
     page.close();
   });
 
+  it('renders with rotation', async () => {
+    const page = await doc.getPage(0);
+    const buf = await page.render({ rotation: 1 }); // 90° CW
+    expect(buf).toBeInstanceOf(Buffer);
+    expect(buf.length).toBeGreaterThan(0);
+    page.close();
+  });
+
+  it('renders PNG with transparent background', async () => {
+    const page = await doc.getPage(0);
+    const buf = await page.render({ format: 'png', transparent: true });
+    expect(buf).toBeInstanceOf(Buffer);
+    // PNG magic bytes
+    expect(buf[0]).toBe(0x89);
+    expect(buf[1]).toBe(0x50);
+    page.close();
+  });
+
+  it('renders without annotations', async () => {
+    const page = await doc.getPage(0);
+    const buf = await page.render({ renderAnnotations: false });
+    expect(buf).toBeInstanceOf(Buffer);
+    expect(buf.length).toBeGreaterThan(0);
+    page.close();
+  });
+
+  it('renders in grayscale', async () => {
+    const page = await doc.getPage(0);
+    const buf = await page.render({ grayscale: true });
+    expect(buf).toBeInstanceOf(Buffer);
+    expect(buf.length).toBeGreaterThan(0);
+    page.close();
+  });
+
   it('writes JPEG to file when output is specified', async () => {
     const page = await doc.getPage(0);
     const outPath = resolve(import.meta.dirname!, '__test_output.jpg');

@@ -74,6 +74,20 @@ describe('PDFiumDocument.getMetadata', () => {
     expect(meta.producer).toContain('pdf-lib');
     doc.destroy();
   });
+
+  it('returns permissions with all flags true for unprotected PDF', async () => {
+    const doc = await loadDocument(fixture('metadata.pdf'));
+    const perms = doc.metadata.permissions;
+    expect(perms.print).toBe(true);
+    expect(perms.modify).toBe(true);
+    expect(perms.copy).toBe(true);
+    expect(perms.annotate).toBe(true);
+    expect(perms.fillForms).toBe(true);
+    expect(perms.extractForAccessibility).toBe(true);
+    expect(perms.assemble).toBe(true);
+    expect(perms.printHighQuality).toBe(true);
+    doc.destroy();
+  });
 });
 
 describe('PDFiumDocument.getBookmarks', () => {
