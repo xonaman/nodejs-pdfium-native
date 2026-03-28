@@ -13,9 +13,18 @@
     "native",
     "render",
     "text-extraction",
-    "ocr",
     "node-addon",
-    "napi"
+    "napi",
+    "pdf-parser",
+    "pdf-reader",
+    "pdf-to-text",
+    "pdf-to-image",
+    "pdf-render",
+    "extract-text",
+    "search",
+    "annotations",
+    "bookmarks",
+    "chromium"
   ],
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -35,6 +44,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/xonaman/nodejs-pdfium-native.git"
+  },
+  "homepage": "https://github.com/xonaman/nodejs-pdfium-native#readme",
+  "bugs": {
+    "url": "https://github.com/xonaman/nodejs-pdfium-native/issues"
   },
   "publishConfig": {
     "access": "public"

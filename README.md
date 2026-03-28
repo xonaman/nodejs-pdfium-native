@@ -1,18 +1,83 @@
 # pdfium-native
 
-Native Node.js bindings for [PDFium](https://pdfium.googlesource.com/pdfium/) — Google's open-source PDF rendering engine. Built as a C++ addon using N-API for full ABI stability across Node.js versions.
+[![npm version](https://img.shields.io/npm/v/pdfium-native)](https://www.npmjs.com/package/pdfium-native)
+[![Node.js](https://img.shields.io/node/v/pdfium-native)](https://nodejs.org)
+[![License](https://img.shields.io/npm/l/pdfium-native)](https://github.com/xonaman/nodejs-pdfium-native/blob/main/LICENSE)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-blue)]()
 
-All expensive operations are async (runs on the libuv thread pool), so the main thread is never blocked.
+Fast, native PDF rendering and text extraction for Node.js — powered by [PDFium](https://pdfium.googlesource.com/pdfium/), the same engine used in Chromium. Built as a C++ addon with N-API for ABI stability across Node.js versions.
 
-## Install
+> Designed for server-side workloads. Non-blocking, fast, and production-ready.
+
+## 🚀 Quick Start
+
+```typescript
+import { loadDocument } from 'pdfium-native';
+
+const doc = await loadDocument('invoice.pdf');
+const page = await doc.getPage(0);
+
+const text = await page.getText();
+const image = await page.render({ scale: 3, format: 'png' }); // high-resolution render
+
+page.close();
+doc.destroy();
+```
+
+## 💡 Why pdfium-native?
+
+**⚡ Performance**
+
+- Native C++ — no WASM overhead, no JS parsing
+- Non-blocking — all operations run off the main thread via libuv workers
+
+**🛠️ Developer experience**
+
+- Built-in JPEG/PNG rendering — no extra dependencies like sharp
+- Prebuilt binaries for 10 platform/arch combinations — no compile step
+- Full TypeScript support with types included
+
+**🔒 Reliability**
+
+- Built on PDFium — the PDF engine used in Chromium
+- ABI-stable via N-API — works across Node.js 18–24 without recompilation
+- Password-protected PDFs supported out of the box
+
+### 🎯 Use cases
+
+- 🖼️ Generate thumbnails and previews for uploaded PDFs
+- 📄 Extract searchable text from documents at scale
+- ⚙️ Build server-side PDF processing pipelines
+- 🔗 Read annotations, bookmarks, and links from existing PDFs
+
+### 📊 How it compares
+
+|                     | **pdfium-native**       | @hyzyla/pdfium            | pdfjs-dist        | pdf-parse      | pdf2json            |
+| ------------------- | ----------------------- | ------------------------- | ----------------- | -------------- | ------------------- |
+| Engine              | PDFium (C++ addon)      | PDFium (WASM)             | pdf.js (JS)       | pdf.js (JS)    | pdf.js fork (JS)    |
+| Rendering           | ✅ JPEG/PNG built-in    | ⚠️ Raw bitmap (BYO sharp) | ⚠️ Canvas/browser | ❌             | ❌                  |
+| Text extraction     | ✅                      | ❌                        | ✅                | ✅             | ✅ (structured)     |
+| Search (with rects) | ✅                      | ❌                        | ⚠️ Manual         | ❌             | ❌                  |
+| Annotations         | ✅                      | ❌                        | ⚠️ Partial        | ❌             | ❌                  |
+| Bookmarks           | ✅                      | ❌                        | ✅                | ❌             | ❌                  |
+| Links               | ✅                      | ❌                        | ✅                | ❌             | ❌                  |
+| Form fields         | ❌                      | ❌                        | ✅                | ❌             | ✅                  |
+| Async I/O           | ✅ libuv workers        | ❌ Sync (WASM)            | ❌ Main thread    | ❌ Main thread | ⚠️ Events / streams |
+| Environment         | Node.js                 | Node.js + browser         | Node.js + browser | Node.js        | Node.js             |
+| Dependencies        | None¹                   | None (WASM bundled)       | None              | pdf.js         | None (since v3)     |
+| Platforms           | macOS / Linux / Windows | Any (WASM)                | Any               | Any            | Any                 |
+
+¹ Prebuilt binaries downloaded at install — no runtime dependencies. Falls back to source compilation if unavailable.
+
+## 📦 Install
 
 ```bash
 npm install pdfium-native
 ```
 
-Prebuilt PDFium binaries are downloaded automatically during install. A C++ compiler is required (Xcode CLI tools on macOS, `build-essential` on Linux, Visual Studio on Windows).
+Prebuilt binaries are available for all [supported platforms](#supported-platforms) — most installs require no compiler. If no prebuilt is available, the package falls back to compiling from source (requires a C++ toolchain: Xcode CLI tools on macOS, `build-essential` on Linux, Visual Studio on Windows).
 
-## Supported Platforms
+## 🌍 Supported Platforms
 
 | OS                    | Architectures          |
 | --------------------- | ---------------------- |
@@ -21,28 +86,7 @@ Prebuilt PDFium binaries are downloaded automatically during install. A C++ comp
 | Linux (musl / Alpine) | x64, arm64             |
 | Windows               | x64, arm64             |
 
-## Quick Start
-
-```typescript
-import { loadDocument } from 'pdfium-native';
-
-const doc = await loadDocument('invoice.pdf');
-const page = await doc.getPage(0);
-
-// extract text
-const text = await page.getText();
-
-// render to buffer
-const jpeg = await page.render({ scale: 3, format: 'jpeg', quality: 90 });
-
-// render to file
-await page.render({ scale: 4, format: 'png', output: 'page-0.png' });
-
-page.close();
-doc.destroy();
-```
-
-## API
+## 📚 API
 
 ### `loadDocument(input, password?)`
 
@@ -200,11 +244,11 @@ interface DocumentMetadata {
 
 ---
 
-## Acknowledgements
+## 🙏 Acknowledgements
 
 This project uses prebuilt PDFium binaries from [bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries), which provides automated builds of the PDFium library for multiple platforms. Thanks to [@bblanchon](https://github.com/bblanchon) for maintaining this invaluable resource.
 
-## Memory Management
+## 🧹 Memory Management
 
 Always call `page.close()` and `doc.destroy()` when done. While GC-triggered destructor hooks exist as a safety net, they should not be relied on — explicit cleanup ensures resources are freed promptly.
 
@@ -222,6 +266,6 @@ try {
 }
 ```
 
-## License
+## 📄 License
 
 MIT
