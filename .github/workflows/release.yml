@@ -167,6 +167,7 @@ jobs:
     permissions:
       contents: write
       id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v6
 
@@ -186,6 +187,11 @@ jobs:
           pattern: prebuild-*
           path: artifacts
           merge-multiple: true
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: artifacts/*.tar.gz
 
       - name: Create GitHub release
         env:
