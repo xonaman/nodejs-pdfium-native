@@ -178,7 +178,7 @@ jobs:
       - run: npm ci --ignore-scripts
 
       - name: Publish to npm
-        run: npm publish
+        run: npm publish --provenance
 
       - name: Download all prebuild artifacts
         uses: actions/download-artifact@v5
