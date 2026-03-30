@@ -6,9 +6,10 @@
  * Musl (Alpine) naming:    pdfium-v{version}-linux-musl-{arch}.tar.gz
  * Contents: build/Release/pdfium.node + build/Release/libpdfium.{dylib,so,dll}
  */
-import { existsSync, mkdirSync, createWriteStream, readFileSync, unlinkSync } from 'node:fs';
+import { execFileSync, execSync } from 'node:child_process';
+import { createWriteStream, existsSync, mkdirSync, readFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
-import { execSync, execFileSync } from 'node:child_process';
+import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 const root = join(import.meta.dirname, '..');
@@ -70,7 +71,6 @@ async function tryDownload() {
     const body = res.body;
     if (!body) return false;
 
-    const { Readable } = await import('node:stream');
     await pipeline(Readable.fromWeb(body), fileStream);
 
     // extract tar.gz into project root
