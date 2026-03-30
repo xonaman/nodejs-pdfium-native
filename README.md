@@ -40,7 +40,7 @@ doc.destroy();
 **🔒 Reliability**
 
 - Built on PDFium — the PDF engine used in Chromium
-- ABI-stable via N-API — works across Node.js 18–24 without recompilation
+- ABI-stable via N-API — works across Node.js 20–24 without recompilation
 - Password-protected PDFs supported out of the box
 
 ### 🎯 Use cases

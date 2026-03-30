@@ -70,7 +70,8 @@ async function tryDownload() {
     const body = res.body;
     if (!body) return false;
 
-    await pipeline(body, fileStream);
+    const { Readable } = await import('node:stream');
+    await pipeline(Readable.fromWeb(body), fileStream);
 
     // extract tar.gz into project root
     execFileSync('tar', ['xzf', tmpTar, '-C', root], { stdio: 'inherit' });
