@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.4] - 2026-03-30
+
+### Fixed
+
+- Bumped minimum Node.js version to 20.11.0 (`import.meta.dirname` requirement)
+- Wrapped web `ReadableStream` with `Readable.fromWeb()` in install script
+- Updated README Node version range from 18–24 to 20–24
+- Used static import for `Readable` instead of dynamic `import()`
+
+### Added
+
+- npm publish provenance (`--provenance` flag)
+- Build provenance attestation for prebuilt binaries via `actions/attest-build-provenance`
+
 ## [0.2.3] - 2026-03-28
 
 ### Added
