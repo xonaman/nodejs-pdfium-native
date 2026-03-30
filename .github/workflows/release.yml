@@ -87,7 +87,7 @@ jobs:
         run: tar czf "pdfium-${{ github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz" build/Release/
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: prebuild-${{ matrix.platform }}-${{ matrix.arch }}
           path: pdfium-*.tar.gz
@@ -155,7 +155,7 @@ jobs:
           fi
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: prebuild-linux-${{ matrix.platform-suffix && format('{0}-', matrix.platform-suffix) || '' }}${{ matrix.arch }}
           path: pdfium-*.tar.gz
@@ -182,7 +182,7 @@ jobs:
         run: npm publish --provenance
 
       - name: Download all prebuild artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           pattern: prebuild-*
           path: artifacts
