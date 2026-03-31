@@ -39,7 +39,10 @@
     "src",
     "lib",
     "scripts",
-    "binding.gyp"
+    "binding.gyp",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
   ],
   "repository": {
     "type": "git",
