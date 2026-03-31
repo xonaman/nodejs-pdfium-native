@@ -173,7 +173,7 @@ interface PageRenderOptions {
   scale?: number; // default: 1 (72 DPI). Use 3–4 for print quality.
   width?: number; // override render width in pixels
   height?: number; // override render height in pixels
-  format?: 'jpeg' | 'png'; // default: 'jpeg'
+  format?: 'jpeg' | 'png'; // default: 'png'
   quality?: number; // JPEG quality 1–100 (default: 100)
   output?: string; // write to file instead of returning a Buffer
   rotation?: 0 | 1 | 2 | 3; // 0=none, 1=90° CW, 2=180°, 3=270° CW
@@ -199,8 +199,42 @@ type PageObject = TextPageObject | ImagePageObject | OtherPageObject;
 // type: 'text' adds: text, fontSize, fontName, fontWeight?, italicAngle?,
 //   renderMode?, fontFamily?, isEmbedded?, fontFlags?
 // type: 'image' adds: imageWidth, imageHeight, horizontalDpi?, verticalDpi?,
-//   bitsPerPixel?, colorspace?, filters?
+//   bitsPerPixel?, colorspace?, filters?, render()
 // type: 'path' | 'shading' | 'form' | 'unknown'
+```
+
+**Image objects** have a `render()` method for extracting the embedded image:
+
+```typescript
+const obj = await page.getObject(0);
+if (obj.type === 'image') {
+  const png = await obj.render(); // PNG buffer (default)
+  const jpeg = await obj.render({ format: 'jpeg', quality: 80 });
+  const raw = await obj.render({ format: 'raw' }); // original encoded stream
+  await obj.render({ output: '/tmp/image.png' }); // write to file
+  await obj.render({ rendered: true }); // apply image mask and transformation matrix
+}
+```
+
+```typescript
+interface ImageRenderOptions {
+  format?: 'jpeg' | 'png' | 'raw'; // default: 'png'. 'raw' returns original stream bytes
+  quality?: number; // JPEG quality 1–100 (default: 100)
+  output?: string; // write to file instead of returning a Buffer
+  rendered?: boolean; // apply image mask and transformation matrix (default: false)
+}
+```
+
+#### `objects()`
+
+Async generator that yields every page object. Convenience wrapper around `getObject()`.
+
+```typescript
+for await (const obj of page.objects()) {
+  if (obj.type === 'image') {
+    await obj.render({ output: `image-${obj.imageWidth}x${obj.imageHeight}.png` });
+  }
+}
 ```
 
 #### `getLinks()`

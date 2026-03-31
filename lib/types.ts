@@ -5,7 +5,7 @@ export interface PageRenderOptions {
   width?: number;
   /** Override render height in pixels. */
   height?: number;
-  /** Output format (default: 'jpeg'). */
+  /** Output format (default: 'png'). */
   format?: 'jpeg' | 'png';
   /** JPEG quality 1–100 (default: 100). Ignored for PNG. */
   quality?: number;
@@ -101,6 +101,17 @@ export type ImageColorspace =
   | 'pattern'
   | 'unknown';
 
+export interface ImageRenderOptions {
+  /** Output format (default: 'png'). Use 'raw' for original encoded stream bytes. */
+  format?: 'jpeg' | 'png' | 'raw';
+  /** JPEG quality 1–100 (default: 100). Ignored for PNG and raw. */
+  quality?: number;
+  /** Write to this file path instead of returning a Buffer. */
+  output?: string;
+  /** Use the rendered bitmap (applies image mask and transformation matrix). Default: false. Ignored when format is 'raw'. */
+  rendered?: boolean;
+}
+
 export interface ImagePageObject extends BasePageObject {
   type: 'image';
   /** Intrinsic image width in pixels. */
@@ -117,6 +128,10 @@ export interface ImagePageObject extends BasePageObject {
   colorspace?: ImageColorspace;
   /** Compression filters applied to the image (e.g. 'FlateDecode', 'DCTDecode'). */
   filters?: string[];
+  /** Renders the image to a file. */
+  render(options: ImageRenderOptions & { output: string }): Promise<void>;
+  /** Renders the image to an encoded buffer (JPEG, PNG, or raw stream bytes). */
+  render(options?: ImageRenderOptions): Promise<Buffer>;
 }
 
 export interface OtherPageObject extends BasePageObject {
@@ -383,6 +398,7 @@ export interface NativePage {
   getText(): Promise<string>;
   render(options?: PageRenderOptions): Promise<Buffer | void>;
   getObject(index: number): Promise<PageObject>;
+  renderImage(index: number, options?: ImageRenderOptions): Promise<Buffer | void>;
   getLinks(): Promise<Link[]>;
   search(text: string, options?: SearchOptions): Promise<SearchMatch[]>;
   getAnnotations(): Promise<Annotation[]>;

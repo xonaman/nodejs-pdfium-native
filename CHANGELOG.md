@@ -4,6 +4,40 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-03-31
+
+### Added
+
+- `ImagePageObject.render()` — extract and render embedded PDF images as PNG, JPEG, or raw stream bytes
+- Three render modes: intrinsic bitmap, rendered bitmap (with mask/matrix), and raw encoded stream
+- File output support for image rendering via `output` option
+- `objects()` async generator on `PDFiumPage` for iterating all page objects
+- Image dimension cap (`MAX_IMAGE_PIXELS = 256 MP`) to prevent allocation failures on huge embedded images
+- Negative object index guard in `RenderImageWorker`
+
+### Changed
+
+- **Breaking:** Default render format changed from JPEG to PNG for both `page.render()` and `image.render()` — use `{ format: 'jpeg' }` to restore previous behavior
+- Image `render()` binding moved from TypeScript layer to native C++ (`GetObjectWorker::OnOK`) for cleaner API
+- `PDFiumPage.getObject()` is now a direct passthrough to the native addon
+
+## [0.3.0] - 2026-03-31
+
+### Added
+
+- `ImagePageObject.render()` — extract and render embedded PDF images as PNG, JPEG, or raw stream bytes
+- Three render modes: intrinsic bitmap, rendered bitmap (with mask/matrix), and raw encoded stream
+- File output support for image rendering via `output` option
+- `objects()` async generator on `PDFiumPage` for iterating all page objects
+- Image dimension cap (`MAX_IMAGE_PIXELS = 256 MP`) to prevent allocation failures on huge embedded images
+- Negative object index guard in `RenderImageWorker`
+
+### Changed
+
+- **Breaking:** Default render format changed from JPEG to PNG for both `page.render()` and `image.render()` — use `{ format: 'jpeg' }` to restore previous behavior
+- Image `render()` binding moved from TypeScript layer to native C++ (`GetObjectWorker::OnOK`) for cleaner API
+- `PDFiumPage.getObject()` is now a direct passthrough to the native addon
+
 ## [0.2.4] - 2026-03-30
 
 ### Fixed

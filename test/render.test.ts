@@ -16,22 +16,11 @@ describe('PDFiumPage.render', () => {
     doc.destroy();
   });
 
-  it('renders as JPEG by default', async () => {
+  it('renders as PNG by default', async () => {
     const page = await doc.getPage(0);
     const buf = await page.render();
     expect(buf).toBeInstanceOf(Buffer);
     expect(buf.length).toBeGreaterThan(0);
-    // JPEG magic bytes: FF D8 FF
-    expect(buf[0]).toBe(0xff);
-    expect(buf[1]).toBe(0xd8);
-    expect(buf[2]).toBe(0xff);
-    page.close();
-  });
-
-  it('renders as PNG when format is png', async () => {
-    const page = await doc.getPage(0);
-    const buf = await page.render({ format: 'png' });
-    expect(buf).toBeInstanceOf(Buffer);
     // PNG magic bytes: 89 50 4E 47
     expect(buf[0]).toBe(0x89);
     expect(buf[1]).toBe(0x50);
@@ -40,10 +29,21 @@ describe('PDFiumPage.render', () => {
     page.close();
   });
 
+  it('renders as JPEG when format is jpeg', async () => {
+    const page = await doc.getPage(0);
+    const buf = await page.render({ format: 'jpeg' });
+    expect(buf).toBeInstanceOf(Buffer);
+    // JPEG magic bytes: FF D8 FF
+    expect(buf[0]).toBe(0xff);
+    expect(buf[1]).toBe(0xd8);
+    expect(buf[2]).toBe(0xff);
+    page.close();
+  });
+
   it('respects quality option for JPEG', async () => {
     const page = await doc.getPage(0);
-    const high = await page.render({ quality: 100 });
-    const low = await page.render({ quality: 10 });
+    const high = await page.render({ format: 'jpeg', quality: 100 });
+    const low = await page.render({ format: 'jpeg', quality: 10 });
     expect(low.length).toBeLessThan(high.length);
     page.close();
   });
@@ -98,17 +98,18 @@ describe('PDFiumPage.render', () => {
     page.close();
   });
 
-  it('writes JPEG to file when output is specified', async () => {
+  it('writes PNG to file when output is specified', async () => {
     const page = await doc.getPage(0);
-    const outPath = resolve(import.meta.dirname!, '__test_output.jpg');
+    const outPath = resolve(import.meta.dirname!, '__test_output.png');
     try {
       const result = await page.render({ output: outPath });
       expect(result).toBeUndefined();
       expect(existsSync(outPath)).toBe(true);
       const bytes = readFileSync(outPath);
-      expect(bytes[0]).toBe(0xff);
-      expect(bytes[1]).toBe(0xd8);
-      expect(bytes[2]).toBe(0xff);
+      expect(bytes[0]).toBe(0x89);
+      expect(bytes[1]).toBe(0x50);
+      expect(bytes[2]).toBe(0x4e);
+      expect(bytes[3]).toBe(0x47);
     } finally {
       page.close();
       try {

@@ -146,6 +146,105 @@ describe('PDFiumPage', () => {
   });
 });
 
+describe('image render', () => {
+  async function findImage(p: PDFiumPage) {
+    for (let i = 0; i < p.objectCount; i++) {
+      const o = await p.getObject(i);
+      if (o.type === 'image') return o;
+    }
+    throw new Error('No image object found');
+  }
+
+  it('renders image as PNG buffer by default', async () => {
+    const doc2 = await loadDocument(fixture('image.pdf'));
+    const p = await doc2.getPage(0);
+    const img = await findImage(p);
+    const buf = await img.render();
+    expect(Buffer.isBuffer(buf)).toBe(true);
+    expect(buf.length).toBeGreaterThan(0);
+    // PNG magic: 0x89 P N G
+    expect(buf[0]).toBe(0x89);
+    expect(buf[1]).toBe(0x50);
+    p.close();
+    doc2.destroy();
+  });
+
+  it('renders image as JPEG buffer', async () => {
+    const doc2 = await loadDocument(fixture('image.pdf'));
+    const p = await doc2.getPage(0);
+    const img = await findImage(p);
+    const buf = await img.render({ format: 'jpeg', quality: 80 });
+    expect(Buffer.isBuffer(buf)).toBe(true);
+    expect(buf.length).toBeGreaterThan(0);
+    // JPEG magic: 0xFF 0xD8
+    expect(buf[0]).toBe(0xff);
+    expect(buf[1]).toBe(0xd8);
+    p.close();
+    doc2.destroy();
+  });
+
+  it('renders raw image data', async () => {
+    const doc2 = await loadDocument(fixture('image.pdf'));
+    const p = await doc2.getPage(0);
+    const img = await findImage(p);
+    const buf = await img.render({ format: 'raw' });
+    expect(Buffer.isBuffer(buf)).toBe(true);
+    expect(buf.length).toBeGreaterThan(0);
+    p.close();
+    doc2.destroy();
+  });
+
+  it('writes image to file', async () => {
+    const { mkdtemp, rm, readFile } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = await mkdtemp(join(tmpdir(), 'pdfium-'));
+    try {
+      const doc2 = await loadDocument(fixture('image.pdf'));
+      const p = await doc2.getPage(0);
+      const img = await findImage(p);
+      const outPath = join(dir, 'extracted.png');
+      const result = await img.render({ output: outPath });
+      expect(result).toBeUndefined();
+      const fileData = await readFile(outPath);
+      expect(fileData.length).toBeGreaterThan(0);
+      expect(fileData[0]).toBe(0x89); // PNG magic
+      p.close();
+      doc2.destroy();
+    } finally {
+      await rm(dir, { recursive: true });
+    }
+  });
+
+  it('renders with mask/matrix applied', async () => {
+    const doc2 = await loadDocument(fixture('image.pdf'));
+    const p = await doc2.getPage(0);
+    const img = await findImage(p);
+    const buf = await img.render({ rendered: true });
+    expect(Buffer.isBuffer(buf)).toBe(true);
+    expect(buf.length).toBeGreaterThan(0);
+    p.close();
+    doc2.destroy();
+  });
+
+  it('render() is not present on non-image objects', async () => {
+    const doc2 = await loadDocument(fixture('text.pdf'));
+    const p = await doc2.getPage(0);
+    let foundText = false;
+    for (let i = 0; i < p.objectCount; i++) {
+      const o = await p.getObject(i);
+      if (o.type === 'text') {
+        foundText = true;
+        expect('render' in o).toBe(false);
+        break;
+      }
+    }
+    expect(foundText).toBe(true);
+    p.close();
+    doc2.destroy();
+  });
+});
+
 describe('multi-page dimensions', () => {
   it('each page has its own dimensions', async () => {
     const doc = await loadDocument(fixture('two-page.pdf'));

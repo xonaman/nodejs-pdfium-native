@@ -54,6 +54,7 @@ export type {
   FormFieldType,
   ImageColorspace,
   ImagePageObject,
+  ImageRenderOptions,
   Link,
   LinkActionType,
   OtherPageObject,

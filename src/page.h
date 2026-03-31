@@ -4,6 +4,7 @@
 #include "form_fields_worker.h"
 #include "links_worker.h"
 #include "objects_worker.h"
+#include "render_image_worker.h"
 #include "render_worker.h"
 #include "search_worker.h"
 #include "text_worker.h"
@@ -30,6 +31,7 @@ public:
             InstanceMethod<&PDFiumPage::GetText>("getText"),
             InstanceMethod<&PDFiumPage::Render>("render"),
             InstanceMethod<&PDFiumPage::GetObject>("getObject"),
+            InstanceMethod<&PDFiumPage::RenderImage>("renderImage"),
             InstanceMethod<&PDFiumPage::GetLinks>("getLinks"),
             InstanceMethod<&PDFiumPage::Search>("search"),
             InstanceMethod<&PDFiumPage::GetAnnotations>("getAnnotations"),
@@ -119,7 +121,7 @@ private:
     double scale = 1.0;
     int renderWidth = 0;
     int renderHeight = 0;
-    int format = IMAGE_FORMAT_JPEG;
+    int format = IMAGE_FORMAT_PNG;
     int quality = 100;
     int rotation = 0;
     bool transparent = false;
@@ -143,8 +145,8 @@ private:
         renderHeight = opts.Get("height").As<Napi::Number>().Int32Value();
       if (opts.Has("format")) {
         std::string fmt = opts.Get("format").As<Napi::String>().Utf8Value();
-        if (fmt == "png")
-          format = IMAGE_FORMAT_PNG;
+        if (fmt == "jpeg")
+          format = IMAGE_FORMAT_JPEG;
       }
       if (opts.Has("quality"))
         quality = opts.Get("quality").As<Napi::Number>().Int32Value();
@@ -217,7 +219,59 @@ private:
     }
 
     int idx = info[0].As<Napi::Number>().Int32Value();
-    auto *worker = new GetObjectWorker(env, page_, idx, alive_, docAlive_);
+    auto *worker = new GetObjectWorker(env, page_, idx, alive_, docAlive_,
+                                       info.This().As<Napi::Object>());
+    auto promise = worker->Promise();
+    worker->Queue();
+    return promise;
+  }
+
+  /**
+   * Renders an image page object (async). Returns a Promise<Buffer>.
+   */
+  Napi::Value RenderImage(const Napi::CallbackInfo &info) {
+    Napi::Env env = info.Env();
+    EnsureOpen(env);
+    if (env.IsExceptionPending())
+      return env.Null();
+
+    if (info.Length() < 1 || !info[0].IsNumber()) {
+      Napi::TypeError::New(env, "Expected object index")
+          .ThrowAsJavaScriptException();
+      return env.Null();
+    }
+
+    int idx = info[0].As<Napi::Number>().Int32Value();
+    int format = IMAGE_FORMAT_PNG;
+    int quality = 100;
+    int mode = RENDER_IMAGE_BITMAP;
+    std::string outputPath;
+
+    if (info.Length() > 1 && info[1].IsObject()) {
+      Napi::Object opts = info[1].As<Napi::Object>();
+      if (opts.Has("format")) {
+        std::string fmt = opts.Get("format").As<Napi::String>().Utf8Value();
+        if (fmt == "jpeg")
+          format = IMAGE_FORMAT_JPEG;
+        else if (fmt == "raw") {
+          mode = RENDER_IMAGE_RAW;
+          format = -1; // unused in raw mode
+        }
+      }
+      if (opts.Has("quality"))
+        quality = std::clamp(
+            opts.Get("quality").As<Napi::Number>().Int32Value(), 1, 100);
+      if (opts.Has("output"))
+        outputPath = opts.Get("output").As<Napi::String>().Utf8Value();
+      if (opts.Has("rendered") &&
+          opts.Get("rendered").As<Napi::Boolean>().Value() &&
+          mode != RENDER_IMAGE_RAW)
+        mode = RENDER_IMAGE_RENDERED;
+    }
+
+    auto *worker =
+        new RenderImageWorker(env, page_, doc_, idx, format, quality,
+                              std::move(outputPath), mode, alive_, docAlive_);
     auto promise = worker->Promise();
     worker->Queue();
     return promise;

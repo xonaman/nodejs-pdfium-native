@@ -45,10 +45,11 @@ class GetObjectWorker : public Napi::AsyncWorker {
 public:
   GetObjectWorker(Napi::Env env, FPDF_PAGE page, int index,
                   std::shared_ptr<std::atomic<bool>> pageAlive,
-                  std::shared_ptr<std::atomic<bool>> docAlive)
+                  std::shared_ptr<std::atomic<bool>> docAlive,
+                  Napi::Object pageObj)
       : Napi::AsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
         page_(page), index_(index), pageAlive_(std::move(pageAlive)),
-        docAlive_(std::move(docAlive)) {}
+        docAlive_(std::move(docAlive)), pageRef_(Napi::Persistent(pageObj)) {}
 
   Napi::Promise Promise() { return deferred_.Promise(); }
 
@@ -303,6 +304,17 @@ protected:
           fArr.Set(fi, Napi::String::New(env, data_.filters[fi]));
         result.Set("filters", fArr);
       }
+
+      // bind render: (opts?) => page.renderImage(index, opts)
+      Napi::Object pageObj = pageRef_.Value();
+      Napi::Value renderImageVal = pageObj.Get("renderImage");
+      if (renderImageVal.IsFunction()) {
+        Napi::Function renderImage = renderImageVal.As<Napi::Function>();
+        Napi::Function bind = renderImage.Get("bind").As<Napi::Function>();
+        result.Set(
+            "render",
+            bind.Call(renderImage, {pageObj, Napi::Number::New(env, index_)}));
+      }
     }
 
     deferred_.Resolve(result);
@@ -318,5 +330,6 @@ private:
   int index_;
   std::shared_ptr<std::atomic<bool>> pageAlive_;
   std::shared_ptr<std::atomic<bool>> docAlive_;
+  Napi::ObjectReference pageRef_;
   PageObjectData data_;
 };
