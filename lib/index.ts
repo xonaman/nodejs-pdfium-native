@@ -46,6 +46,16 @@ export async function loadDocument(input: PdfInput, password?: string): Promise<
 export async function splitDocument(
   input: PdfInput,
   splitAt: number[],
+  options: SplitDocumentOptions & { outputs: string[] },
+): Promise<void>;
+export async function splitDocument(
+  input: PdfInput,
+  splitAt: number[],
+  options?: SplitDocumentOptions,
+): Promise<Buffer[]>;
+export async function splitDocument(
+  input: PdfInput,
+  splitAt: number[],
   options?: SplitDocumentOptions,
 ): Promise<Buffer[] | void> {
   try {
@@ -58,6 +68,14 @@ export async function splitDocument(
 /**
  * Combines multiple PDFs into a single document.
  */
+export async function mergeDocuments(
+  inputs: Array<PdfInput | MergeDocumentInput>,
+  options: MergeDocumentsOptions & { output: string },
+): Promise<void>;
+export async function mergeDocuments(
+  inputs: Array<PdfInput | MergeDocumentInput>,
+  options?: MergeDocumentsOptions,
+): Promise<Buffer>;
 export async function mergeDocuments(
   inputs: Array<PdfInput | MergeDocumentInput>,
   options?: MergeDocumentsOptions,
