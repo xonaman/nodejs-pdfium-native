@@ -1,6 +1,9 @@
+import { withConcurrency } from './concurrency.js';
 import type {
   Annotation,
   FormField,
+  ImagePageObject,
+  ImageRenderOptions,
   Link,
   NativePage,
   PageObject,
@@ -48,7 +51,7 @@ export class PDFiumPage {
 
   /** Extracts all text from the page. */
   getText(): Promise<string> {
-    return this.native.getText();
+    return withConcurrency(() => this.native.getText());
   }
 
   /** Renders the page to a file. */
@@ -56,12 +59,19 @@ export class PDFiumPage {
   /** Renders the page to an encoded image buffer (JPEG or PNG). */
   render(options?: PageRenderOptions): Promise<Buffer>;
   render(options?: PageRenderOptions): Promise<Buffer | void> {
-    return this.native.render(options);
+    return withConcurrency(() => this.native.render(options));
   }
 
   /** Returns the page object at the given index with type and bounds. */
-  getObject(index: number): Promise<PageObject> {
-    return this.native.getObject(index);
+  async getObject(index: number): Promise<PageObject> {
+    const obj = await withConcurrency(() => this.native.getObject(index));
+    // wrap the native render function on image objects with the concurrency semaphore
+    if (obj.type === 'image') {
+      const nativeRender = (obj as ImagePageObject).render.bind(obj);
+      (obj as ImagePageObject).render = ((opts?: ImageRenderOptions) =>
+        withConcurrency(() => nativeRender(opts))) as ImagePageObject['render'];
+    }
+    return obj;
   }
 
   /** Iterates over all page objects (text spans, paths, images, etc.). */
@@ -78,21 +88,21 @@ export class PDFiumPage {
 
   /** Returns all links on the page. */
   getLinks(): Promise<Link[]> {
-    return this.native.getLinks();
+    return withConcurrency(() => this.native.getLinks());
   }
 
   /** Searches for text on the page. Returns matches with positions and bounding rects. */
   search(text: string, options?: SearchOptions): Promise<SearchMatch[]> {
-    return this.native.search(text, options);
+    return withConcurrency(() => this.native.search(text, options));
   }
 
   /** Returns all annotations on the page. */
   getAnnotations(): Promise<Annotation[]> {
-    return this.native.getAnnotations();
+    return withConcurrency(() => this.native.getAnnotations());
   }
 
   /** Returns all form fields on the page. */
   getFormFields(): Promise<FormField[]> {
-    return this.native.getFormFields();
+    return withConcurrency(() => this.native.getFormFields());
   }
 }

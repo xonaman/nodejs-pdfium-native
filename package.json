@@ -79,7 +79,8 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "node-addon-api": "^8.0.0"
+    "node-addon-api": "^8.0.0",
+    "p-limit": "^7.3.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

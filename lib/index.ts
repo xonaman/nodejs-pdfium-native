@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { withConcurrency } from './concurrency.js';
 import { PDFiumDocument } from './document.js';
 import { parseNativeError } from './errors.js';
 import type { NativeAddon } from './types.js';
@@ -27,12 +28,13 @@ const addon: NativeAddon = require('../build/Release/pdfium.node');
  */
 export async function loadDocument(input: PdfInput, password?: string): Promise<PDFiumDocument> {
   try {
-    return new PDFiumDocument(await addon.loadDocument(input, password));
+    return new PDFiumDocument(await withConcurrency(() => addon.loadDocument(input, password)));
   } catch (err) {
     throw parseNativeError(err);
   }
 }
 
+export { concurrency } from './concurrency.js';
 export { PDFiumDocument } from './document.js';
 export {
   PDFiumError,

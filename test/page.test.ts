@@ -271,8 +271,8 @@ describe('page close', () => {
     // width/height are cached — still accessible after close
     expect(page.width).toBeCloseTo(612, 0);
     expect(page.height).toBeCloseTo(792, 0);
-    // native methods throw synchronously after close (before async worker is created)
-    expect(() => page.getText()).toThrow('Page is closed');
+    // native methods reject after close
+    await expect(page.getText()).rejects.toThrow('Page is closed');
     doc.destroy();
   });
 

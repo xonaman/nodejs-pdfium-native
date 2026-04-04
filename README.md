@@ -365,6 +365,26 @@ interface DocumentMetadata {
 
 ---
 
+## ⚙️ Concurrency
+
+### `concurrency(value?): number`
+
+Gets or sets the maximum number of concurrent native operations dispatched to the thread pool.
+
+The default is the number of CPU cores (`os.availableParallelism()`). A value of `0` resets to the default.
+
+PDFium is single-threaded internally — all operations are serialized through a global mutex. The concurrency limiter prevents excess libuv worker threads from being blocked waiting on that mutex.
+
+```typescript
+import { loadDocument, concurrency } from 'pdfium-native';
+
+concurrency(); // 8 (CPU cores)
+concurrency(2); // limit to 2 concurrent operations
+concurrency(0); // reset to default
+```
+
+---
+
 ## 🙏 Acknowledgements
 
 This project uses prebuilt PDFium binaries from [bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries), which provides automated builds of the PDFium library for multiple platforms. Thanks to [@bblanchon](https://github.com/bblanchon) for maintaining this invaluable resource.

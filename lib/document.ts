@@ -1,3 +1,4 @@
+import { withConcurrency } from './concurrency.js';
 import { PDFiumPage } from './page.js';
 import type { Bookmark, DocumentMetadata, NativeDocument } from './types.js';
 
@@ -18,7 +19,7 @@ export class PDFiumDocument {
 
   /** Gets a page by 0-based index. */
   async getPage(index: number): Promise<PDFiumPage> {
-    return new PDFiumPage(await this.native.getPage(index));
+    return new PDFiumPage(await withConcurrency(() => this.native.getPage(index)));
   }
 
   /** Iterates over all pages. Caller is responsible for closing each page. */
@@ -35,6 +36,6 @@ export class PDFiumDocument {
 
   /** Returns the bookmark/outline tree. */
   getBookmarks(): Promise<Bookmark[]> {
-    return this.native.getBookmarks();
+    return withConcurrency(() => this.native.getBookmarks());
   }
 }
