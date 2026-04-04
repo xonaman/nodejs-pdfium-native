@@ -5,6 +5,7 @@
 #include "fpdf_attachment.h"
 #include "fpdf_catalog.h"
 #include "fpdf_signature.h"
+#include "split_merge_worker.h"
 
 Napi::FunctionReference PDFiumDocument::pageConstructor;
 
@@ -266,6 +267,151 @@ Napi::Value LoadDocument(const Napi::CallbackInfo &info) {
 }
 
 // ---------------------------------------------------------------------------
+// splitDocument — split a PDF into multiple documents (async)
+// ---------------------------------------------------------------------------
+
+Napi::Value SplitDocument(const Napi::CallbackInfo &info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 2) {
+    Napi::TypeError::New(env, "Expected (input, splitAt, options?) arguments")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  Napi::Value arg = info[0];
+  Napi::Array jsSplitAt = info[1].As<Napi::Array>();
+
+  std::vector<int> splitAt;
+  splitAt.reserve(jsSplitAt.Length());
+  for (uint32_t i = 0; i < jsSplitAt.Length(); i++) {
+    splitAt.push_back(jsSplitAt.Get(i).As<Napi::Number>().Int32Value());
+  }
+
+  std::vector<std::string> outputPaths;
+  std::string password;
+  if (info.Length() > 2 && info[2].IsObject()) {
+    Napi::Object opts = info[2].As<Napi::Object>();
+    if (opts.Has("outputs") && opts.Get("outputs").IsArray()) {
+      Napi::Array jsOutputs = opts.Get("outputs").As<Napi::Array>();
+      outputPaths.reserve(jsOutputs.Length());
+      for (uint32_t i = 0; i < jsOutputs.Length(); i++) {
+        outputPaths.push_back(jsOutputs.Get(i).As<Napi::String>().Utf8Value());
+      }
+    }
+    if (opts.Has("password") && opts.Get("password").IsString()) {
+      password = opts.Get("password").As<Napi::String>().Utf8Value();
+    }
+  }
+
+  SplitDocumentWorker *worker = nullptr;
+
+  if (arg.IsBuffer()) {
+    auto buffer = arg.As<Napi::Buffer<uint8_t>>();
+    std::vector<uint8_t> data(buffer.Data(), buffer.Data() + buffer.Length());
+    worker =
+        new SplitDocumentWorker(env, std::move(data), std::move(splitAt),
+                                std::move(outputPaths), std::move(password));
+  } else if (arg.IsString()) {
+    std::string path = arg.As<Napi::String>().Utf8Value();
+    worker =
+        new SplitDocumentWorker(env, std::move(path), std::move(splitAt),
+                                std::move(outputPaths), std::move(password));
+  } else {
+    Napi::TypeError::New(env, "Expected a Buffer or string path argument")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  auto promise = worker->Promise();
+  worker->Queue();
+  return promise;
+}
+
+// ---------------------------------------------------------------------------
+// mergeDocuments — combine multiple PDFs (async)
+// ---------------------------------------------------------------------------
+
+Napi::Value MergeDocuments(const Napi::CallbackInfo &info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 1 || !info[0].IsArray()) {
+    Napi::TypeError::New(env, "Expected (inputs[], options?) arguments")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  Napi::Array jsInputs = info[0].As<Napi::Array>();
+  if (jsInputs.Length() == 0) {
+    Napi::TypeError::New(env, "At least one input document is required")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  std::string outputPath;
+  if (info.Length() > 1 && info[1].IsObject()) {
+    Napi::Object opts = info[1].As<Napi::Object>();
+    if (opts.Has("output") && opts.Get("output").IsString()) {
+      outputPath = opts.Get("output").As<Napi::String>().Utf8Value();
+    }
+  }
+
+  std::vector<DocInput> inputs;
+  inputs.reserve(jsInputs.Length());
+
+  for (uint32_t i = 0; i < jsInputs.Length(); i++) {
+    Napi::Value item = jsInputs.Get(i);
+    DocInput di;
+
+    // each item is either a Buffer/string, or { input, password }
+    if (item.IsBuffer()) {
+      auto buffer = item.As<Napi::Buffer<uint8_t>>();
+      di.bufferData.assign(buffer.Data(), buffer.Data() + buffer.Length());
+      di.useFile = false;
+    } else if (item.IsString()) {
+      di.filePath = item.As<Napi::String>().Utf8Value();
+      di.useFile = true;
+    } else if (item.IsObject()) {
+      Napi::Object obj = item.As<Napi::Object>();
+      if (!obj.Has("input")) {
+        Napi::TypeError::New(env, "Each input must have an 'input' property")
+            .ThrowAsJavaScriptException();
+        return env.Null();
+      }
+      Napi::Value inp = obj.Get("input");
+      if (inp.IsBuffer()) {
+        auto buffer = inp.As<Napi::Buffer<uint8_t>>();
+        di.bufferData.assign(buffer.Data(), buffer.Data() + buffer.Length());
+        di.useFile = false;
+      } else if (inp.IsString()) {
+        di.filePath = inp.As<Napi::String>().Utf8Value();
+        di.useFile = true;
+      } else {
+        Napi::TypeError::New(env, "input must be a Buffer or string path")
+            .ThrowAsJavaScriptException();
+        return env.Null();
+      }
+      if (obj.Has("password") && obj.Get("password").IsString()) {
+        di.password = obj.Get("password").As<Napi::String>().Utf8Value();
+      }
+    } else {
+      Napi::TypeError::New(env,
+                           "Each input must be a Buffer, string, or object")
+          .ThrowAsJavaScriptException();
+      return env.Null();
+    }
+
+    inputs.push_back(std::move(di));
+  }
+
+  auto *worker =
+      new MergeDocumentsWorker(env, std::move(inputs), std::move(outputPath));
+  auto promise = worker->Promise();
+  worker->Queue();
+  return promise;
+}
+
+// ---------------------------------------------------------------------------
 // Module init
 // ---------------------------------------------------------------------------
 
@@ -293,6 +439,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("PDFiumDocument", docCtor);
   exports.Set("PDFiumPage", pageCtor);
   exports.Set("loadDocument", Napi::Function::New(env, LoadDocument));
+  exports.Set("splitDocument", Napi::Function::New(env, SplitDocument));
+  exports.Set("mergeDocuments", Napi::Function::New(env, MergeDocuments));
 
   return exports;
 }

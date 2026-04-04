@@ -414,6 +414,34 @@ export interface NativeDocument {
   destroy(): void;
 }
 
+export interface SplitDocumentOptions {
+  /** Write each part to these file paths instead of returning Buffers. Must have splitAt.length + 1 entries. */
+  outputs?: string[];
+  /** Password for the source PDF (if encrypted). */
+  password?: string;
+}
+
+export interface MergeDocumentInput {
+  /** PDF file path or Buffer. */
+  input: Buffer | string;
+  /** Password for this PDF (if encrypted). */
+  password?: string;
+}
+
+export interface MergeDocumentsOptions {
+  /** Write to this file path instead of returning a Buffer. */
+  output?: string;
+}
+
 export interface NativeAddon {
   loadDocument(input: Buffer | string, password?: string): Promise<NativeDocument>;
+  splitDocument(
+    input: Buffer | string,
+    splitAt: number[],
+    options?: { outputs?: string[]; password?: string },
+  ): Promise<Buffer[] | undefined>;
+  mergeDocuments(
+    inputs: Array<Buffer | string | { input: Buffer | string; password?: string }>,
+    options?: { output?: string },
+  ): Promise<Buffer | undefined>;
 }

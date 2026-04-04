@@ -4,7 +4,12 @@ import { fileURLToPath } from 'node:url';
 import { withConcurrency } from './concurrency.js';
 import { PDFiumDocument } from './document.js';
 import { parseNativeError } from './errors.js';
-import type { NativeAddon } from './types.js';
+import type {
+  MergeDocumentInput,
+  MergeDocumentsOptions,
+  NativeAddon,
+  SplitDocumentOptions,
+} from './types.js';
 
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -29,6 +34,36 @@ const addon: NativeAddon = require('../build/Release/pdfium.node');
 export async function loadDocument(input: PdfInput, password?: string): Promise<PDFiumDocument> {
   try {
     return new PDFiumDocument(await withConcurrency(() => addon.loadDocument(input, password)));
+  } catch (err) {
+    throw parseNativeError(err);
+  }
+}
+
+/**
+ * Splits a PDF into multiple documents at the given page indices.
+ * Each index marks the first page of a new chunk.
+ */
+export async function splitDocument(
+  input: PdfInput,
+  splitAt: number[],
+  options?: SplitDocumentOptions,
+): Promise<Buffer[] | void> {
+  try {
+    return await withConcurrency(() => addon.splitDocument(input, splitAt, options));
+  } catch (err) {
+    throw parseNativeError(err);
+  }
+}
+
+/**
+ * Combines multiple PDFs into a single document.
+ */
+export async function mergeDocuments(
+  inputs: Array<PdfInput | MergeDocumentInput>,
+  options?: MergeDocumentsOptions,
+): Promise<Buffer | void> {
+  try {
+    return await withConcurrency(() => addon.mergeDocuments(inputs, options));
   } catch (err) {
     throw parseNativeError(err);
   }
@@ -59,6 +94,8 @@ export type {
   ImageRenderOptions,
   Link,
   LinkActionType,
+  MergeDocumentInput,
+  MergeDocumentsOptions,
   OtherPageObject,
   PageObject,
   PageObjectBounds,
@@ -68,6 +105,7 @@ export type {
   SearchMatch,
   SearchOptions,
   SearchRect,
+  SplitDocumentOptions,
   TextPageObject,
   TextRenderMode,
 } from './types.js';

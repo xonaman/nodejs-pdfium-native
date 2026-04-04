@@ -48,6 +48,7 @@ doc.destroy();
 - 🖼️ Generate thumbnails and previews for uploaded PDFs
 - 📄 Extract searchable text from documents at scale
 - ⚙️ Build server-side PDF processing pipelines
+- ✂️ Split PDFs by page range or merge multiple PDFs into one
 - 🔗 Read annotations, bookmarks, links, and form fields from existing PDFs
 
 ### 📊 How it compares
@@ -97,6 +98,66 @@ const doc = await loadDocument(buffer);
 const doc = await loadDocument('/path/to/file.pdf');
 const doc = await loadDocument(buffer, 'secret');
 ```
+
+---
+
+### `splitDocument(input, splitAt, options?)`
+
+Splits a PDF into multiple documents at the given page indices. Each index in `splitAt` marks the first page of a new chunk. Returns `Promise<Buffer[]>`, or `Promise<void>` if `outputs` is set.
+
+A 10-page PDF with `splitAt: [3, 7]` produces three documents: pages 0–2, 3–6, and 7–9.
+
+```typescript
+import { splitDocument } from 'pdfium-native';
+
+// split a two-page PDF into two single-page documents
+const [part1, part2] = await splitDocument('report.pdf', [1]);
+
+// split into three parts (no split points = single document containing all pages)
+const [a, b, c] = await splitDocument(buffer, [3, 7]);
+
+// write parts to files
+await splitDocument('report.pdf', [5], {
+  outputs: ['first-half.pdf', 'second-half.pdf'],
+});
+
+// password-protected source
+const parts = await splitDocument('encrypted.pdf', [3], { password: 'secret' });
+```
+
+| Option     | Type       | Default | Description                                                                                               |
+| ---------- | ---------- | ------- | --------------------------------------------------------------------------------------------------------- |
+| `outputs`  | `string[]` | —       | Write each part to these file paths instead of returning Buffers. Must have `splitAt.length + 1` entries. |
+| `password` | `string`   | —       | Password for the source PDF.                                                                              |
+
+---
+
+### `mergeDocuments(inputs, options?)`
+
+Combines multiple PDFs into a single document. Returns `Promise<Buffer>`, or `Promise<void>` if `output` is set.
+
+Each element of `inputs` can be a `Buffer`, a file path string, or an object `{ input, password? }` for password-protected PDFs.
+
+```typescript
+import { mergeDocuments } from 'pdfium-native';
+
+// merge two files
+const buf = await mergeDocuments(['part1.pdf', 'part2.pdf']);
+
+// mix buffers, paths, and password-protected PDFs
+const buf = await mergeDocuments([
+  buffer1,
+  'part2.pdf',
+  { input: 'encrypted.pdf', password: 'secret' },
+]);
+
+// write directly to a file
+await mergeDocuments(['a.pdf', 'b.pdf'], { output: 'merged.pdf' });
+```
+
+| Option   | Type     | Default | Description                                            |
+| -------- | -------- | ------- | ------------------------------------------------------ |
+| `output` | `string` | —       | Write to this file path instead of returning a Buffer. |
 
 ---
 
