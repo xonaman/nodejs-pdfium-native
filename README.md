@@ -70,6 +70,21 @@ doc.destroy();
 
 ¹ Prebuilt binaries downloaded at install — no runtime dependencies. Falls back to source compilation if unavailable.
 
+## Table of Contents
+
+- [Install](#-install)
+- [Supported Platforms](#-supported-platforms)
+- [API](#-api)
+  - [loadDocument](#loaddocumentinput-password)
+  - [splitDocument](#splitdocumentinput-splitat-options)
+  - [mergeDocuments](#mergedocumentsinputs-options)
+  - [PDFiumDocument](#pdfiumdocument)
+  - [PDFiumPage](#pdfiumpage)
+  - [DocumentMetadata](#documentmetadata)
+- [Concurrency](#️-concurrency)
+- [Memory Management](#-memory-management)
+- [License](#-license)
+
 ## 📦 Install
 
 ```bash
