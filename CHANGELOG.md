@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] - 2026-04-04
+
+### Added
+
+- `splitDocument()` — split a PDF into multiple documents at given page indices, with buffer or file output
+- `mergeDocuments()` — combine multiple PDFs into one, supporting buffers, file paths, and per-document passwords
+- Comparison table in README now includes Split / Merge row
+- Table of contents in README
+
 ## [0.4.0] - 2026-04-04
 
 ### Added
