@@ -76,7 +76,12 @@
     "lint": "eslint --fix .",
     "lint:check": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,js,json,md,yaml,yml}": "prettier --write",
+    "*.{ts,js}": "eslint --max-warnings 0"
   },
   "dependencies": {
     "node-addon-api": "^8.0.0",
@@ -88,6 +93,8 @@
     "eslint": "^10.1.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "node-gyp": "^11.0.0",
     "prettier": "^3.8.1",
     "typescript": "^5.9.3",
