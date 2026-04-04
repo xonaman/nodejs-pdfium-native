@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.1] - 2026-04-04
+
+### Added
+
+- Function overloads for `splitDocument()` and `mergeDocuments()` — return type now narrows to `Promise<void>` when file output paths are provided, or `Promise<Buffer[]>` / `Promise<Buffer>` otherwise
+
 ## [0.5.0] - 2026-04-04
 
 ### Added
