@@ -18,7 +18,7 @@
         "-fno-exceptions"
       ],
       "cflags": [
-        "-Os",
+        "-Oz",
         "-flto",
         "-ffunction-sections",
         "-fdata-sections"
@@ -41,7 +41,7 @@
               "DEAD_CODE_STRIPPING": "YES",
               "LLVM_LTO": "YES",
               "OTHER_CPLUSPLUSFLAGS": [
-                "-Os",
+                "-Oz",
                 "-ffunction-sections",
                 "-fdata-sections"
               ],

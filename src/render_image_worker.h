@@ -5,9 +5,16 @@
 
 #include <atomic>
 #include <cstdio>
-#include <filesystem>
 #include <memory>
 #include <vector>
+
+#ifdef _WIN32
+#include <io.h>
+#define F_OK 0
+#define access _access
+#else
+#include <unistd.h>
+#endif
 
 #include "fpdf_edit.h"
 
@@ -235,11 +242,14 @@ private:
   }
 
   bool WriteToFile() {
-    std::filesystem::path outPath(outputPath_);
-    auto parentDir = outPath.parent_path();
-    if (!parentDir.empty() && !std::filesystem::is_directory(parentDir)) {
-      SetError("Parent directory does not exist: " + parentDir.string());
-      return false;
+    // check parent directory exists
+    auto slash = outputPath_.rfind('/');
+    if (slash != std::string::npos && slash > 0) {
+      std::string parentDir = outputPath_.substr(0, slash);
+      if (access(parentDir.c_str(), F_OK) != 0) {
+        SetError("Parent directory does not exist: " + parentDir);
+        return false;
+      }
     }
 
     FILE *f = fopen(outputPath_.c_str(), "wb");
