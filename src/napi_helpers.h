@@ -34,15 +34,38 @@ constexpr int MAX_BOOKMARK_DEPTH = 64;
 // ---------------------------------------------------------------------------
 // Per-environment alive flag for worker thread safety
 // ---------------------------------------------------------------------------
-// When a Node.js worker thread is terminated (e.g. worker.terminate()), the
-// V8 isolate tears down but libuv async callbacks may still fire. If OnOK or
-// OnError tries to create V8 handles after teardown, Node crashes with
-// "Cannot create a handle without a HandleScope". This flag is set to false
-// by an env cleanup hook so workers can bail out early.
+// When a Node.js worker thread is terminated (worker.terminate()), it calls
+// TerminateExecution() + set_can_call_into_js(false) and then drains the libuv
+// event loop. Async work completions fire during this drain. The base
+// AsyncWorker::OnWorkComplete creates a HandleScope which crashes if V8 is
+// shutting down ("Cannot create a handle without a HandleScope" or "Entering
+// the V8 API without proper locking").
+//
+// We use three layers of defense:
+//
+// Layer 1 — C-level env probe: napi_throw(env, nullptr) uses NAPI_PREAMBLE
+//   which checks can_call_into_js(). worker.terminate() sets this to false
+//   BEFORE draining the loop, so completions see it immediately. Returns
+//   napi_invalid_arg when alive (null value rejected), napi_cannot_run_js
+//   when shutting down. No V8 calls in either path.
+//
+// Layer 2 — envAlive_ atomic + cleanup hook: the cleanup hook fires during
+//   RunCleanup() after the uv drain, catching any completions that arrive
+//   during or after the cleanup phase.
+//
+// Layer 3 — prepareShutdown() JS export: called from the worker thread JS
+//   code before it signals readiness for termination. Sets envAlive_ to
+//   false while V8 is fully alive (belt-and-suspenders).
 
 struct AddonData {
   std::shared_ptr<std::atomic<bool>> envAlive =
       std::make_shared<std::atomic<bool>>(true);
+
+  // per-env constructor references — must NOT be static globals because each
+  // worker thread has its own V8 isolate and env. A static global would be
+  // overwritten by the last thread to call Init(), causing cross-isolate use.
+  Napi::FunctionReference docConstructor;
+  Napi::FunctionReference pageConstructor;
 };
 
 inline std::shared_ptr<std::atomic<bool>> GetEnvAlive(Napi::Env env) {
@@ -50,10 +73,52 @@ inline std::shared_ptr<std::atomic<bool>> GetEnvAlive(Napi::Env env) {
   return data ? data->envAlive : nullptr;
 }
 
-// early-return from OnOK/OnError if the N-API environment is being torn down
-#define CHECK_ENV()                                                            \
-  if (envAlive_ && !envAlive_->load())                                         \
-    return;
+// ---------------------------------------------------------------------------
+// SafeAsyncWorker — guards OnWorkComplete against env teardown
+// ---------------------------------------------------------------------------
+// All async workers MUST inherit from this class instead of Napi::AsyncWorker
+// to be safe for use in worker threads that may be terminated at any time.
+//
+// OnWorkComplete is overridden to skip ALL V8 API calls when the environment
+// is no longer alive. The JS promise will never settle, but the worker thread
+// is being destroyed anyway — there is no listener for the result.
+
+class SafeAsyncWorker : public Napi::AsyncWorker {
+public:
+  void OnWorkComplete(Napi::Env env, napi_status status) override {
+    // Layer 2: cleanup hook already fired — env is being torn down
+    if (envAlive_ && !envAlive_->load())
+      return;
+
+    // Layer 1: probe whether V8 is still accessible by attempting the exact
+    // operation that crashes in the base class: opening a handle scope.
+    // napi_open_handle_scope is a raw C call — no C++ exception on failure.
+    // worker.terminate() races with this: the parent sets can_call_into_js
+    // to false and calls TerminateExecution, but with relaxed atomics the
+    // worker thread may not see the flag yet. If the scope open fails here,
+    // we know the env is dead and bail out immediately.
+    napi_handle_scope scope = nullptr;
+    if (napi_open_handle_scope(env, &scope) != napi_ok)
+      return;
+    napi_close_handle_scope(env, scope);
+
+    // safety net: catch Napi::Error in case the env becomes unusable between
+    // our probe and the base class's HandleScope / OnOK / OnError calls.
+    // The base OnWorkComplete creates a HandleScope OUTSIDE WrapCallback's
+    // try-catch, so a failure there throws an uncaught Napi::Error.
+    try {
+      Napi::AsyncWorker::OnWorkComplete(env, status);
+    } catch (const Napi::Error &) {
+      // env tore down between our probe and the base class call — swallow
+    }
+  }
+
+protected:
+  std::shared_ptr<std::atomic<bool>> envAlive_;
+
+  explicit SafeAsyncWorker(Napi::Env env)
+      : Napi::AsyncWorker(env), envAlive_(GetEnvAlive(env)) {}
+};
 
 // ---------------------------------------------------------------------------
 // PDFium UTF-16 string helpers

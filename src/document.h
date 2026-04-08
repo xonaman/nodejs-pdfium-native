@@ -43,9 +43,6 @@ public:
   // returns the document alive flag (shared with pages)
   std::shared_ptr<std::atomic<bool>> GetDocAlive() const { return docAlive_; }
 
-  // store the page constructor so we can create instances
-  static Napi::FunctionReference pageConstructor;
-
 private:
   FPDF_DOCUMENT doc_ = nullptr;
   std::vector<uint8_t> ownedBuffer_;
@@ -110,14 +107,14 @@ private:
 // GetPageWorker — async page loading
 // ---------------------------------------------------------------------------
 
-class GetPageWorker : public Napi::AsyncWorker {
+class GetPageWorker : public SafeAsyncWorker {
 public:
   GetPageWorker(Napi::Env env, FPDF_DOCUMENT doc, int pageIndex,
                 PDFiumDocument *docWrapper,
                 std::shared_ptr<std::atomic<bool>> docAlive)
-      : Napi::AsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
-        envAlive_(GetEnvAlive(env)), doc_(doc), pageIndex_(pageIndex),
-        docWrapper_(docWrapper), docAlive_(std::move(docAlive)) {}
+      : SafeAsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
+        doc_(doc), pageIndex_(pageIndex), docWrapper_(docWrapper),
+        docAlive_(std::move(docAlive)) {}
 
   Napi::Promise Promise() { return deferred_.Promise(); }
 
@@ -177,9 +174,9 @@ protected:
   }
 
   void OnOK() override {
-    CHECK_ENV();
     Napi::Env env = Env();
-    Napi::Object pageObj = PDFiumDocument::pageConstructor.New({});
+    auto *addon = env.GetInstanceData<AddonData>();
+    Napi::Object pageObj = addon->pageConstructor.New({});
     PDFiumPage *pageWrapper = PDFiumPage::Unwrap(pageObj);
     pageWrapper->SetPage(page_, doc_, pageIndex_, width_, height_);
     pageWrapper->SetDocAlive(docAlive_);
@@ -205,13 +202,11 @@ protected:
   }
 
   void OnError(const Napi::Error &err) override {
-    CHECK_ENV();
     deferred_.Reject(err.Value());
   }
 
 private:
   Napi::Promise::Deferred deferred_;
-  std::shared_ptr<std::atomic<bool>> envAlive_;
   FPDF_DOCUMENT doc_;
   int pageIndex_;
   PDFiumDocument *docWrapper_;

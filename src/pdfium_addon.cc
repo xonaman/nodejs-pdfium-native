@@ -8,13 +8,9 @@
 #include "fpdf_signature.h"
 #include "split_merge_worker.h"
 
-Napi::FunctionReference PDFiumDocument::pageConstructor;
-
 // ---------------------------------------------------------------------------
 // Module-level: loadDocument (async)
 // ---------------------------------------------------------------------------
-
-static Napi::FunctionReference g_docConstructor;
 
 static std::string GetPdfiumErrorMessage() {
   unsigned long err = FPDF_GetLastError();
@@ -53,20 +49,20 @@ static std::string GetPdfiumErrorMessage() {
 // LoadDocumentWorker — async document loading
 // ---------------------------------------------------------------------------
 
-class LoadDocumentWorker : public Napi::AsyncWorker {
+class LoadDocumentWorker : public SafeAsyncWorker {
 public:
   // buffer variant — copies data since buffer may be GC'd
   LoadDocumentWorker(Napi::Env env, std::vector<uint8_t> data,
                      std::string password)
-      : Napi::AsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
-        envAlive_(GetEnvAlive(env)), bufferData_(std::move(data)),
-        password_(std::move(password)), useFile_(false) {}
+      : SafeAsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
+        bufferData_(std::move(data)), password_(std::move(password)),
+        useFile_(false) {}
 
   // file path variant
   LoadDocumentWorker(Napi::Env env, std::string path, std::string password)
-      : Napi::AsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
-        envAlive_(GetEnvAlive(env)), filePath_(std::move(path)),
-        password_(std::move(password)), useFile_(true) {}
+      : SafeAsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
+        filePath_(std::move(path)), password_(std::move(password)),
+        useFile_(true) {}
 
   Napi::Promise Promise() { return deferred_.Promise(); }
 
@@ -153,9 +149,9 @@ protected:
   }
 
   void OnOK() override {
-    CHECK_ENV();
     Napi::Env env = Env();
-    Napi::Object docObj = g_docConstructor.New({});
+    auto *addon = Env().GetInstanceData<AddonData>();
+    Napi::Object docObj = addon->docConstructor.New({});
     PDFiumDocument *docWrapper = PDFiumDocument::Unwrap(docObj);
     docWrapper->SetDocument(doc_);
 
@@ -211,13 +207,11 @@ protected:
   }
 
   void OnError(const Napi::Error &err) override {
-    CHECK_ENV();
     deferred_.Reject(err.Value());
   }
 
 private:
   Napi::Promise::Deferred deferred_;
-  std::shared_ptr<std::atomic<bool>> envAlive_;
   std::vector<uint8_t> bufferData_;
   std::string filePath_;
   std::string password_;
@@ -424,11 +418,25 @@ Napi::Value MergeDocuments(const Napi::CallbackInfo &info) {
 // Module init
 // ---------------------------------------------------------------------------
 
+/**
+ * Marks the environment as shutting down so in-flight async workers bail
+ * out of OnWorkComplete instead of creating a HandleScope on a dead isolate.
+ * Called from worker thread JS before signaling readiness for termination.
+ */
+Napi::Value PrepareShutdown(const Napi::CallbackInfo &info) {
+  auto envAlive = GetEnvAlive(info.Env());
+  if (envAlive)
+    envAlive->store(false);
+  return info.Env().Undefined();
+}
+
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
-  // store per-environment alive flag for async worker safety
+  // per-environment alive flag for async worker safety (Layer 2+3)
   auto *addonData = new AddonData();
   env.SetInstanceData(addonData);
   auto envAlive = addonData->envAlive;
+
+  // Layer 2: cleanup hook — fires during RunCleanup() after uv drain
   env.AddCleanupHook([envAlive]() { envAlive->store(false); });
 
   if (!g_initialized) {
@@ -442,20 +450,22 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     });
   }
 
-  // register classes
+  // register classes — constructor refs are per-env (not static globals)
+  // because each worker thread has its own V8 isolate
   Napi::Function pageCtor = PDFiumPage::Init(env);
-  PDFiumDocument::pageConstructor = Napi::Persistent(pageCtor);
-  PDFiumDocument::pageConstructor.SuppressDestruct();
+  addonData->pageConstructor = Napi::Persistent(pageCtor);
+  addonData->pageConstructor.SuppressDestruct();
 
   Napi::Function docCtor = PDFiumDocument::Init(env);
-  g_docConstructor = Napi::Persistent(docCtor);
-  g_docConstructor.SuppressDestruct();
+  addonData->docConstructor = Napi::Persistent(docCtor);
+  addonData->docConstructor.SuppressDestruct();
 
   exports.Set("PDFiumDocument", docCtor);
   exports.Set("PDFiumPage", pageCtor);
   exports.Set("loadDocument", Napi::Function::New(env, LoadDocument));
   exports.Set("splitDocument", Napi::Function::New(env, SplitDocument));
   exports.Set("mergeDocuments", Napi::Function::New(env, MergeDocuments));
+  exports.Set("prepareShutdown", Napi::Function::New(env, PrepareShutdown));
 
   return exports;
 }

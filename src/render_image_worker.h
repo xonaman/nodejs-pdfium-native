@@ -26,16 +26,16 @@ enum RenderImageMode {
 // RenderImageWorker — async image rendering from a page object
 // ---------------------------------------------------------------------------
 
-class RenderImageWorker : public Napi::AsyncWorker {
+class RenderImageWorker : public SafeAsyncWorker {
 public:
   RenderImageWorker(Napi::Env env, FPDF_PAGE page, FPDF_DOCUMENT doc,
                     int objectIndex, int format, int quality,
                     std::string outputPath, int mode,
                     std::shared_ptr<std::atomic<bool>> pageAlive,
                     std::shared_ptr<std::atomic<bool>> docAlive)
-      : Napi::AsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
-        envAlive_(GetEnvAlive(env)), page_(page), doc_(doc),
-        objectIndex_(objectIndex), format_(format), quality_(quality),
+      : SafeAsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
+        page_(page), doc_(doc), objectIndex_(objectIndex), format_(format),
+        quality_(quality),
         outputPath_(std::move(outputPath)), mode_(mode),
         pageAlive_(std::move(pageAlive)), docAlive_(std::move(docAlive)) {}
 
@@ -83,7 +83,6 @@ protected:
   }
 
   void OnOK() override {
-    CHECK_ENV();
     Napi::Env env = Env();
     if (outputPath_.empty()) {
       auto data = Napi::Buffer<uint8_t>::Copy(env, encodedData_.data(),
@@ -95,13 +94,11 @@ protected:
   }
 
   void OnError(const Napi::Error &err) override {
-    CHECK_ENV();
     deferred_.Reject(err.Value());
   }
 
 private:
   Napi::Promise::Deferred deferred_;
-  std::shared_ptr<std::atomic<bool>> envAlive_;
   FPDF_PAGE page_;
   FPDF_DOCUMENT doc_;
   int objectIndex_;

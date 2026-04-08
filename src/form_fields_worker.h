@@ -32,14 +32,14 @@ struct FormFieldData {
   std::vector<FormFieldOptionData> options;
 };
 
-class GetFormFieldsWorker : public Napi::AsyncWorker {
+class GetFormFieldsWorker : public SafeAsyncWorker {
 public:
   GetFormFieldsWorker(Napi::Env env, FPDF_PAGE page, FPDF_DOCUMENT doc,
                       std::shared_ptr<std::atomic<bool>> pageAlive,
                       std::shared_ptr<std::atomic<bool>> docAlive)
-      : Napi::AsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
-        envAlive_(GetEnvAlive(env)), page_(page), doc_(doc),
-        pageAlive_(std::move(pageAlive)), docAlive_(std::move(docAlive)) {}
+      : SafeAsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
+        page_(page), doc_(doc), pageAlive_(std::move(pageAlive)),
+        docAlive_(std::move(docAlive)) {}
 
   Napi::Promise Promise() { return deferred_.Promise(); }
 
@@ -201,7 +201,6 @@ protected:
   }
 
   void OnOK() override {
-    CHECK_ENV();
     Napi::Env env = Env();
     Napi::Array arr = Napi::Array::New(env, fields_.size());
     for (uint32_t i = 0; i < fields_.size(); i++) {
@@ -238,13 +237,11 @@ protected:
   }
 
   void OnError(const Napi::Error &err) override {
-    CHECK_ENV();
     deferred_.Reject(err.Value());
   }
 
 private:
   Napi::Promise::Deferred deferred_;
-  std::shared_ptr<std::atomic<bool>> envAlive_;
   FPDF_PAGE page_;
   FPDF_DOCUMENT doc_;
   std::shared_ptr<std::atomic<bool>> pageAlive_;

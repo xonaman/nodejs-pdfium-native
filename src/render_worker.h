@@ -22,15 +22,15 @@ inline void stb_write_callback(void *context, void *data, int size) {
 // RenderWorker — async page rendering
 // ---------------------------------------------------------------------------
 
-class RenderWorker : public Napi::AsyncWorker {
+class RenderWorker : public SafeAsyncWorker {
 public:
   RenderWorker(Napi::Env env, FPDF_PAGE page, int renderWidth, int renderHeight,
                int format, int quality, std::string outputPath, int rotation,
                bool transparent, int renderFlags,
                std::shared_ptr<std::atomic<bool>> pageAlive)
-      : Napi::AsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
-        envAlive_(GetEnvAlive(env)), page_(page), renderWidth_(renderWidth),
-        renderHeight_(renderHeight), format_(format), quality_(quality),
+      : SafeAsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
+        page_(page), renderWidth_(renderWidth), renderHeight_(renderHeight),
+        format_(format), quality_(quality),
         outputPath_(std::move(outputPath)), rotation_(rotation),
         transparent_(transparent), renderFlags_(renderFlags),
         pageAlive_(std::move(pageAlive)) {}
@@ -132,7 +132,6 @@ protected:
   }
 
   void OnOK() override {
-    CHECK_ENV();
     Napi::Env env = Env();
     if (outputPath_.empty()) {
       auto data = Napi::Buffer<uint8_t>::Copy(env, encodedData_.data(),
@@ -144,13 +143,11 @@ protected:
   }
 
   void OnError(const Napi::Error &err) override {
-    CHECK_ENV();
     deferred_.Reject(err.Value());
   }
 
 private:
   Napi::Promise::Deferred deferred_;
-  std::shared_ptr<std::atomic<bool>> envAlive_;
   FPDF_PAGE page_;
   int renderWidth_;
   int renderHeight_;

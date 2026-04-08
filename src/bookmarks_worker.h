@@ -25,13 +25,12 @@ struct BookmarkData {
   std::vector<BookmarkData> children;
 };
 
-class GetBookmarksWorker : public Napi::AsyncWorker {
+class GetBookmarksWorker : public SafeAsyncWorker {
 public:
   GetBookmarksWorker(Napi::Env env, FPDF_DOCUMENT doc,
                      std::shared_ptr<std::atomic<bool>> docAlive)
-      : Napi::AsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
-        envAlive_(GetEnvAlive(env)), doc_(doc), docAlive_(std::move(docAlive)) {
-  }
+      : SafeAsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
+        doc_(doc), docAlive_(std::move(docAlive)) {}
 
   Napi::Promise Promise() { return deferred_.Promise(); }
 
@@ -46,18 +45,15 @@ protected:
   }
 
   void OnOK() override {
-    CHECK_ENV();
     deferred_.Resolve(BuildArray(Env(), bookmarks_));
   }
 
   void OnError(const Napi::Error &err) override {
-    CHECK_ENV();
     deferred_.Reject(err.Value());
   }
 
 private:
   Napi::Promise::Deferred deferred_;
-  std::shared_ptr<std::atomic<bool>> envAlive_;
   FPDF_DOCUMENT doc_;
   std::shared_ptr<std::atomic<bool>> docAlive_;
   std::vector<BookmarkData> bookmarks_;
