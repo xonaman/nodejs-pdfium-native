@@ -1,6 +1,7 @@
 #include "document.h"
 
 #include <climits>
+#include <cstring>
 
 #include "fpdf_attachment.h"
 #include "fpdf_catalog.h"
@@ -78,6 +79,11 @@ protected:
     if (useFile_) {
       doc_ = FPDF_LoadDocument(filePath_.c_str(), pw);
     } else {
+      if (bufferData_.size() < 5 ||
+          memcmp(bufferData_.data(), "%PDF-", 5) != 0) {
+        SetError("FORMAT:Input is not a valid PDF (missing %PDF- header)");
+        return;
+      }
       if (bufferData_.size() > static_cast<size_t>(INT_MAX)) {
         SetError("FORMAT:Buffer too large");
         return;
