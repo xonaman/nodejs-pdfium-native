@@ -1,6 +1,6 @@
 {
   "name": "pdfium-native",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Native Node.js bindings for PDFium",
   "license": "MIT",
   "type": "module",

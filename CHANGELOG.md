@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.2] - 2026-04-08
+
+### Added
+
+- Validate `%PDF-` magic header on buffer input before passing to PDFium, returning a `FORMAT` error instead of risking an internal abort on garbage input
+- Guard all async worker `OnOK`/`OnError` callbacks against V8 environment teardown — prevents fatal `HandleScope` crash when a Node.js worker thread is terminated mid-operation
+
 ## [0.5.1] - 2026-04-04
 
 ### Added
