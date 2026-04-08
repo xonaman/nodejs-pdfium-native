@@ -58,14 +58,14 @@ public:
   LoadDocumentWorker(Napi::Env env, std::vector<uint8_t> data,
                      std::string password)
       : Napi::AsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
-        bufferData_(std::move(data)), password_(std::move(password)),
-        useFile_(false) {}
+        envAlive_(GetEnvAlive(env)), bufferData_(std::move(data)),
+        password_(std::move(password)), useFile_(false) {}
 
   // file path variant
   LoadDocumentWorker(Napi::Env env, std::string path, std::string password)
       : Napi::AsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
-        filePath_(std::move(path)), password_(std::move(password)),
-        useFile_(true) {}
+        envAlive_(GetEnvAlive(env)), filePath_(std::move(path)),
+        password_(std::move(password)), useFile_(true) {}
 
   Napi::Promise Promise() { return deferred_.Promise(); }
 
@@ -147,6 +147,7 @@ protected:
   }
 
   void OnOK() override {
+    CHECK_ENV();
     Napi::Env env = Env();
     Napi::Object docObj = g_docConstructor.New({});
     PDFiumDocument *docWrapper = PDFiumDocument::Unwrap(docObj);
@@ -204,11 +205,13 @@ protected:
   }
 
   void OnError(const Napi::Error &err) override {
+    CHECK_ENV();
     deferred_.Reject(err.Value());
   }
 
 private:
   Napi::Promise::Deferred deferred_;
+  std::shared_ptr<std::atomic<bool>> envAlive_;
   std::vector<uint8_t> bufferData_;
   std::string filePath_;
   std::string password_;
@@ -416,6 +419,12 @@ Napi::Value MergeDocuments(const Napi::CallbackInfo &info) {
 // ---------------------------------------------------------------------------
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
+  // store per-environment alive flag for async worker safety
+  auto *addonData = new AddonData();
+  env.SetInstanceData(addonData);
+  auto envAlive = addonData->envAlive;
+  env.AddCleanupHook([envAlive]() { envAlive->store(false); });
+
   if (!g_initialized) {
     FPDF_InitLibrary();
     g_initialized = true;

@@ -116,8 +116,8 @@ public:
                 PDFiumDocument *docWrapper,
                 std::shared_ptr<std::atomic<bool>> docAlive)
       : Napi::AsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
-        doc_(doc), pageIndex_(pageIndex), docWrapper_(docWrapper),
-        docAlive_(std::move(docAlive)) {}
+        envAlive_(GetEnvAlive(env)), doc_(doc), pageIndex_(pageIndex),
+        docWrapper_(docWrapper), docAlive_(std::move(docAlive)) {}
 
   Napi::Promise Promise() { return deferred_.Promise(); }
 
@@ -177,6 +177,7 @@ protected:
   }
 
   void OnOK() override {
+    CHECK_ENV();
     Napi::Env env = Env();
     Napi::Object pageObj = PDFiumDocument::pageConstructor.New({});
     PDFiumPage *pageWrapper = PDFiumPage::Unwrap(pageObj);
@@ -204,11 +205,13 @@ protected:
   }
 
   void OnError(const Napi::Error &err) override {
+    CHECK_ENV();
     deferred_.Reject(err.Value());
   }
 
 private:
   Napi::Promise::Deferred deferred_;
+  std::shared_ptr<std::atomic<bool>> envAlive_;
   FPDF_DOCUMENT doc_;
   int pageIndex_;
   PDFiumDocument *docWrapper_;

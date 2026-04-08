@@ -119,9 +119,9 @@ public:
                       std::vector<std::string> outputPaths,
                       std::string password)
       : Napi::AsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
-        bufferData_(std::move(data)), splitAt_(std::move(splitAt)),
-        outputPaths_(std::move(outputPaths)), password_(std::move(password)),
-        useFile_(false) {}
+        envAlive_(GetEnvAlive(env)), bufferData_(std::move(data)),
+        splitAt_(std::move(splitAt)), outputPaths_(std::move(outputPaths)),
+        password_(std::move(password)), useFile_(false) {}
 
   // file path variant
   SplitDocumentWorker(Napi::Env env, std::string filePath,
@@ -129,9 +129,9 @@ public:
                       std::vector<std::string> outputPaths,
                       std::string password)
       : Napi::AsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
-        filePath_(std::move(filePath)), splitAt_(std::move(splitAt)),
-        outputPaths_(std::move(outputPaths)), password_(std::move(password)),
-        useFile_(true) {}
+        envAlive_(GetEnvAlive(env)), filePath_(std::move(filePath)),
+        splitAt_(std::move(splitAt)), outputPaths_(std::move(outputPaths)),
+        password_(std::move(password)), useFile_(true) {}
 
   Napi::Promise Promise() { return deferred_.Promise(); }
 
@@ -213,6 +213,7 @@ protected:
   }
 
   void OnOK() override {
+    CHECK_ENV();
     Napi::Env env = Env();
     if (!outputPaths_.empty()) {
       deferred_.Resolve(env.Undefined());
@@ -228,11 +229,13 @@ protected:
   }
 
   void OnError(const Napi::Error &err) override {
+    CHECK_ENV();
     deferred_.Reject(err.Value());
   }
 
 private:
   Napi::Promise::Deferred deferred_;
+  std::shared_ptr<std::atomic<bool>> envAlive_;
   std::vector<uint8_t> bufferData_;
   std::string filePath_;
   std::vector<int> splitAt_;
@@ -258,7 +261,8 @@ public:
   MergeDocumentsWorker(Napi::Env env, std::vector<DocInput> inputs,
                        std::string outputPath)
       : Napi::AsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
-        inputs_(std::move(inputs)), outputPath_(std::move(outputPath)) {}
+        envAlive_(GetEnvAlive(env)), inputs_(std::move(inputs)),
+        outputPath_(std::move(outputPath)) {}
 
   Napi::Promise Promise() { return deferred_.Promise(); }
 
@@ -322,6 +326,7 @@ protected:
   }
 
   void OnOK() override {
+    CHECK_ENV();
     Napi::Env env = Env();
     if (outputPath_.empty()) {
       deferred_.Resolve(Napi::Buffer<uint8_t>::Copy(env, resultData_.data(),
@@ -332,11 +337,13 @@ protected:
   }
 
   void OnError(const Napi::Error &err) override {
+    CHECK_ENV();
     deferred_.Reject(err.Value());
   }
 
 private:
   Napi::Promise::Deferred deferred_;
+  std::shared_ptr<std::atomic<bool>> envAlive_;
   std::vector<DocInput> inputs_;
   std::string outputPath_;
   std::vector<uint8_t> resultData_;

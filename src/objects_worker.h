@@ -48,8 +48,9 @@ public:
                   std::shared_ptr<std::atomic<bool>> docAlive,
                   Napi::Object pageObj)
       : Napi::AsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
-        page_(page), index_(index), pageAlive_(std::move(pageAlive)),
-        docAlive_(std::move(docAlive)), pageRef_(Napi::Persistent(pageObj)) {}
+        envAlive_(GetEnvAlive(env)), page_(page), index_(index),
+        pageAlive_(std::move(pageAlive)), docAlive_(std::move(docAlive)),
+        pageRef_(Napi::Persistent(pageObj)) {}
 
   Napi::Promise Promise() { return deferred_.Promise(); }
 
@@ -247,6 +248,7 @@ protected:
   }
 
   void OnOK() override {
+    CHECK_ENV();
     Napi::Env env = Env();
     Napi::Object result = Napi::Object::New(env);
     result.Set("type", Napi::String::New(env, data_.type));
@@ -321,11 +323,13 @@ protected:
   }
 
   void OnError(const Napi::Error &err) override {
+    CHECK_ENV();
     deferred_.Reject(err.Value());
   }
 
 private:
   Napi::Promise::Deferred deferred_;
+  std::shared_ptr<std::atomic<bool>> envAlive_;
   FPDF_PAGE page_;
   int index_;
   std::shared_ptr<std::atomic<bool>> pageAlive_;

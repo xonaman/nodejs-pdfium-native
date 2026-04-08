@@ -32,6 +32,30 @@ constexpr int MAX_BOOKMARK_DEPTH = 64;
   }
 
 // ---------------------------------------------------------------------------
+// Per-environment alive flag for worker thread safety
+// ---------------------------------------------------------------------------
+// When a Node.js worker thread is terminated (e.g. worker.terminate()), the
+// V8 isolate tears down but libuv async callbacks may still fire. If OnOK or
+// OnError tries to create V8 handles after teardown, Node crashes with
+// "Cannot create a handle without a HandleScope". This flag is set to false
+// by an env cleanup hook so workers can bail out early.
+
+struct AddonData {
+  std::shared_ptr<std::atomic<bool>> envAlive =
+      std::make_shared<std::atomic<bool>>(true);
+};
+
+inline std::shared_ptr<std::atomic<bool>> GetEnvAlive(Napi::Env env) {
+  auto *data = env.GetInstanceData<AddonData>();
+  return data ? data->envAlive : nullptr;
+}
+
+// early-return from OnOK/OnError if the N-API environment is being torn down
+#define CHECK_ENV()                                                            \
+  if (envAlive_ && !envAlive_->load())                                         \
+    return;
+
+// ---------------------------------------------------------------------------
 // PDFium UTF-16 string helpers
 // ---------------------------------------------------------------------------
 
