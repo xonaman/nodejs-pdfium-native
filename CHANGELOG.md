@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.3] - 2026-04-08
+
+### Fixed
+
+- Store document and page constructor references per-env instead of as static globals — fixes cross-isolate V8 crash when multiple worker threads load the addon concurrently
+- Add `SafeAsyncWorker` base class with `OnWorkComplete` guard (env-alive check, `napi_open_handle_scope` probe, try-catch) — all 13 async worker classes now inherit from it
+
 ## [0.5.2] - 2026-04-08
 
 ### Added
