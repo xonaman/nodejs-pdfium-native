@@ -42,8 +42,7 @@ public:
                     std::shared_ptr<std::atomic<bool>> docAlive)
       : SafeAsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
         page_(page), doc_(doc), objectIndex_(objectIndex), format_(format),
-        quality_(quality),
-        outputPath_(std::move(outputPath)), mode_(mode),
+        quality_(quality), outputPath_(std::move(outputPath)), mode_(mode),
         pageAlive_(std::move(pageAlive)), docAlive_(std::move(docAlive)) {}
 
   Napi::Promise Promise() { return deferred_.Promise(); }
@@ -203,20 +202,37 @@ private:
     std::vector<uint8_t> pixels(static_cast<size_t>(width) *
                                 static_cast<size_t>(height) * outChannels);
 
-    for (int y = 0; y < height; y++) {
-      auto *row = static_cast<uint8_t *>(bufferData) + y * stride;
-      for (int x = 0; x < width; x++) {
-        int dstIdx = (y * width + x) * outChannels;
-
-        if (bitmapFormat == FPDFBitmap_Gray) {
-          pixels[dstIdx] = row[x];
-        } else {
-          int srcIdx = x * srcBytesPerPixel;
-          pixels[dstIdx + 0] = row[srcIdx + 2]; // R ← B
-          pixels[dstIdx + 1] = row[srcIdx + 1]; // G
-          pixels[dstIdx + 2] = row[srcIdx + 0]; // B ← R
-          if (keepAlpha)
-            pixels[dstIdx + 3] = row[srcIdx + 3]; // A
+    // hoisted conditionals for auto-vectorization
+    if (bitmapFormat == FPDFBitmap_Gray) {
+      for (int y = 0; y < height; y++) {
+        auto *src = static_cast<uint8_t *>(bufferData) + y * stride;
+        auto *dst = pixels.data() + y * width;
+        for (int x = 0; x < width; x++)
+          dst[x] = src[x];
+      }
+    } else if (keepAlpha) {
+      for (int y = 0; y < height; y++) {
+        auto *src = static_cast<uint8_t *>(bufferData) + y * stride;
+        auto *dst = pixels.data() + y * width * 4;
+        for (int x = 0; x < width; x++) {
+          dst[0] = src[2]; // R ← B
+          dst[1] = src[1]; // G
+          dst[2] = src[0]; // B ← R
+          dst[3] = src[3]; // A
+          src += srcBytesPerPixel;
+          dst += 4;
+        }
+      }
+    } else {
+      for (int y = 0; y < height; y++) {
+        auto *src = static_cast<uint8_t *>(bufferData) + y * stride;
+        auto *dst = pixels.data() + y * width * 3;
+        for (int x = 0; x < width; x++) {
+          dst[0] = src[2]; // R ← B
+          dst[1] = src[1]; // G
+          dst[2] = src[0]; // B ← R
+          src += srcBytesPerPixel;
+          dst += 3;
         }
       }
     }

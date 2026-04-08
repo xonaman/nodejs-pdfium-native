@@ -4,8 +4,15 @@
 
 #include <atomic>
 #include <cstdio>
-#include <filesystem>
 #include <memory>
+
+#ifdef _WIN32
+#include <io.h>
+#define F_OK 0
+#define access _access
+#else
+#include <unistd.h>
+#endif
 
 #include "stb_image_write.h"
 
@@ -30,10 +37,9 @@ public:
                std::shared_ptr<std::atomic<bool>> pageAlive)
       : SafeAsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
         page_(page), renderWidth_(renderWidth), renderHeight_(renderHeight),
-        format_(format), quality_(quality),
-        outputPath_(std::move(outputPath)), rotation_(rotation),
-        transparent_(transparent), renderFlags_(renderFlags),
-        pageAlive_(std::move(pageAlive)) {}
+        format_(format), quality_(quality), outputPath_(std::move(outputPath)),
+        rotation_(rotation), transparent_(transparent),
+        renderFlags_(renderFlags), pageAlive_(std::move(pageAlive)) {}
 
   Napi::Promise Promise() { return deferred_.Promise(); }
 
@@ -74,16 +80,31 @@ protected:
     std::vector<uint8_t> pixels(static_cast<size_t>(renderWidth_) *
                                 static_cast<size_t>(renderHeight_) * channels);
 
-    for (int y = 0; y < renderHeight_; y++) {
-      auto *row = static_cast<uint8_t *>(bufferData) + y * stride;
-      for (int x = 0; x < renderWidth_; x++) {
-        int srcIdx = x * 4;
-        int dstIdx = (y * renderWidth_ + x) * channels;
-        pixels[dstIdx + 0] = row[srcIdx + 2]; // R ← BGRA[2]
-        pixels[dstIdx + 1] = row[srcIdx + 1]; // G ← BGRA[1]
-        pixels[dstIdx + 2] = row[srcIdx + 0]; // B ← BGRA[0]
-        if (transparent_)
-          pixels[dstIdx + 3] = row[srcIdx + 3]; // A ← BGRA[3]
+    // hoisted conditional for auto-vectorization (same-stride inner loop)
+    if (transparent_) {
+      for (int y = 0; y < renderHeight_; y++) {
+        auto *src = static_cast<uint8_t *>(bufferData) + y * stride;
+        auto *dst = pixels.data() + y * renderWidth_ * 4;
+        for (int x = 0; x < renderWidth_; x++) {
+          dst[0] = src[2]; // R ← BGRA[2]
+          dst[1] = src[1]; // G ← BGRA[1]
+          dst[2] = src[0]; // B ← BGRA[0]
+          dst[3] = src[3]; // A ← BGRA[3]
+          src += 4;
+          dst += 4;
+        }
+      }
+    } else {
+      for (int y = 0; y < renderHeight_; y++) {
+        auto *src = static_cast<uint8_t *>(bufferData) + y * stride;
+        auto *dst = pixels.data() + y * renderWidth_ * 3;
+        for (int x = 0; x < renderWidth_; x++) {
+          dst[0] = src[2]; // R ← BGRA[2]
+          dst[1] = src[1]; // G ← BGRA[1]
+          dst[2] = src[0]; // B ← BGRA[0]
+          src += 4;
+          dst += 3;
+        }
       }
     }
 
@@ -109,11 +130,13 @@ protected:
     // write to file if output path was specified
     if (!outputPath_.empty()) {
       // verify parent directory exists
-      std::filesystem::path outPath(outputPath_);
-      auto parentDir = outPath.parent_path();
-      if (!parentDir.empty() && !std::filesystem::is_directory(parentDir)) {
-        SetError("Parent directory does not exist: " + parentDir.string());
-        return;
+      auto slash = outputPath_.rfind('/');
+      if (slash != std::string::npos && slash > 0) {
+        std::string parentDir = outputPath_.substr(0, slash);
+        if (access(parentDir.c_str(), F_OK) != 0) {
+          SetError("Parent directory does not exist: " + parentDir);
+          return;
+        }
       }
 
       FILE *f = fopen(outputPath_.c_str(), "wb");

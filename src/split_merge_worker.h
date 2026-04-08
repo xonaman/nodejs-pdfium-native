@@ -4,8 +4,15 @@
 
 #include <climits>
 #include <cstdio>
-#include <filesystem>
 #include <vector>
+
+#ifdef _WIN32
+#include <io.h>
+#define F_OK 0
+#define access _access
+#else
+#include <unistd.h>
+#endif
 
 #include "fpdf_edit.h"
 #include "fpdf_ppo.h"
@@ -42,11 +49,13 @@ static inline bool SaveDocument(FPDF_DOCUMENT doc,
   }
 
   if (!outputPath.empty()) {
-    std::filesystem::path outPath(outputPath);
-    auto parentDir = outPath.parent_path();
-    if (!parentDir.empty() && !std::filesystem::is_directory(parentDir)) {
-      outError = "Parent directory does not exist: " + parentDir.string();
-      return false;
+    auto slash = outputPath.rfind('/');
+    if (slash != std::string::npos && slash > 0) {
+      std::string parentDir = outputPath.substr(0, slash);
+      if (access(parentDir.c_str(), F_OK) != 0) {
+        outError = "Parent directory does not exist: " + parentDir;
+        return false;
+      }
     }
     FILE *f = fopen(outputPath.c_str(), "wb");
     if (!f) {
@@ -120,8 +129,8 @@ public:
                       std::string password)
       : SafeAsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
         bufferData_(std::move(data)), splitAt_(std::move(splitAt)),
-        outputPaths_(std::move(outputPaths)),
-        password_(std::move(password)), useFile_(false) {}
+        outputPaths_(std::move(outputPaths)), password_(std::move(password)),
+        useFile_(false) {}
 
   // file path variant
   SplitDocumentWorker(Napi::Env env, std::string filePath,
@@ -130,8 +139,8 @@ public:
                       std::string password)
       : SafeAsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
         filePath_(std::move(filePath)), splitAt_(std::move(splitAt)),
-        outputPaths_(std::move(outputPaths)),
-        password_(std::move(password)), useFile_(true) {}
+        outputPaths_(std::move(outputPaths)), password_(std::move(password)),
+        useFile_(true) {}
 
   Napi::Promise Promise() { return deferred_.Promise(); }
 

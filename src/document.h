@@ -3,6 +3,7 @@
 #include "bookmarks_worker.h"
 #include "page.h"
 
+#include <algorithm>
 #include <atomic>
 #include <memory>
 
@@ -37,6 +38,11 @@ public:
 
   // register a page's alive flag so we can invalidate it on destroy
   void RegisterPageAlive(std::shared_ptr<std::atomic<bool>> flag) {
+    // compact: remove entries for pages already closed/GC'd
+    pageAliveFlags_.erase(
+        std::remove_if(pageAliveFlags_.begin(), pageAliveFlags_.end(),
+                       [](const auto &f) { return !f->load(); }),
+        pageAliveFlags_.end());
     pageAliveFlags_.push_back(std::move(flag));
   }
 
