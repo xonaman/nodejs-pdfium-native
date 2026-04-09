@@ -9,7 +9,41 @@
 #include "fpdf_doc.h"
 #include "fpdfview.h"
 
-inline std::atomic<bool> g_initialized{false};
+inline std::atomic<int> g_pdfium_refcount{0};
+
+// format the last PDFium error as "CODE:message"
+inline std::string GetPdfiumErrorMessage() {
+  unsigned long err = FPDF_GetLastError();
+  const char *code;
+  const char *msg;
+  switch (err) {
+  case FPDF_ERR_FILE:
+    code = "FILE";
+    msg = "File not found or could not be opened";
+    break;
+  case FPDF_ERR_FORMAT:
+    code = "FORMAT";
+    msg = "Not a valid PDF or corrupted";
+    break;
+  case FPDF_ERR_PASSWORD:
+    code = "PASSWORD";
+    msg = "Password required or incorrect";
+    break;
+  case FPDF_ERR_SECURITY:
+    code = "SECURITY";
+    msg = "Unsupported security scheme";
+    break;
+  case FPDF_ERR_PAGE:
+    code = "PAGE";
+    msg = "Page error";
+    break;
+  default:
+    code = "UNKNOWN";
+    msg = "Unknown error";
+    break;
+  }
+  return std::string(code) + ":" + msg;
+}
 
 // PDFium is not thread-safe — serialize all calls through a global mutex.
 // This unblocks the Node.js event loop while waiting for the lock.
@@ -130,7 +164,7 @@ protected:
 template <typename GetLen, typename GetData>
 inline std::u16string ReadU16(GetLen getLen, GetData getData) {
   unsigned long len = getLen(static_cast<FPDF_WCHAR *>(nullptr), 0);
-  if (len < 4 || len % 2 != 0)
+  if (len < 2 || len % 2 != 0)
     return {};
   std::vector<unsigned short> buf(len / sizeof(unsigned short));
   getData(reinterpret_cast<FPDF_WCHAR *>(buf.data()), len);

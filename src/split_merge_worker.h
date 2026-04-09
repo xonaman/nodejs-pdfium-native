@@ -94,24 +94,7 @@ static inline FPDF_DOCUMENT LoadDoc(const std::vector<uint8_t> &bufferData,
   }
 
   if (!doc) {
-    unsigned long err = FPDF_GetLastError();
-    switch (err) {
-    case FPDF_ERR_FILE:
-      outError = "FILE:File not found or could not be opened";
-      break;
-    case FPDF_ERR_FORMAT:
-      outError = "FORMAT:Not a valid PDF or corrupted";
-      break;
-    case FPDF_ERR_PASSWORD:
-      outError = "PASSWORD:Password required or incorrect";
-      break;
-    case FPDF_ERR_SECURITY:
-      outError = "SECURITY:Unsupported security scheme";
-      break;
-    default:
-      outError = "UNKNOWN:Unknown error";
-      break;
-    }
+    outError = GetPdfiumErrorMessage();
   }
   return doc;
 }
@@ -228,9 +211,13 @@ protected:
     } else {
       Napi::Array arr = Napi::Array::New(env, resultParts_.size());
       for (size_t i = 0; i < resultParts_.size(); i++) {
-        arr.Set(static_cast<uint32_t>(i),
-                Napi::Buffer<uint8_t>::Copy(env, resultParts_[i].data(),
-                                            resultParts_[i].size()));
+        auto *vec = new std::vector<uint8_t>(std::move(resultParts_[i]));
+        arr.Set(
+            static_cast<uint32_t>(i),
+            Napi::Buffer<uint8_t>::New(
+                env, vec->data(), vec->size(),
+                [](Napi::Env, uint8_t *, std::vector<uint8_t> *v) { delete v; },
+                vec));
       }
       deferred_.Resolve(arr);
     }
@@ -333,8 +320,11 @@ protected:
   void OnOK() override {
     Napi::Env env = Env();
     if (outputPath_.empty()) {
-      deferred_.Resolve(Napi::Buffer<uint8_t>::Copy(env, resultData_.data(),
-                                                    resultData_.size()));
+      auto *vec = new std::vector<uint8_t>(std::move(resultData_));
+      deferred_.Resolve(Napi::Buffer<uint8_t>::New(
+          env, vec->data(), vec->size(),
+          [](Napi::Env, uint8_t *, std::vector<uint8_t> *v) { delete v; },
+          vec));
     } else {
       deferred_.Resolve(env.Undefined());
     }

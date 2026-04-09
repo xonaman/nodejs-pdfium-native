@@ -12,39 +12,6 @@
 // Module-level: loadDocument (async)
 // ---------------------------------------------------------------------------
 
-static std::string GetPdfiumErrorMessage() {
-  unsigned long err = FPDF_GetLastError();
-  const char *code;
-  const char *msg;
-  switch (err) {
-  case FPDF_ERR_FILE:
-    code = "FILE";
-    msg = "File not found or could not be opened";
-    break;
-  case FPDF_ERR_FORMAT:
-    code = "FORMAT";
-    msg = "Not a valid PDF or corrupted";
-    break;
-  case FPDF_ERR_PASSWORD:
-    code = "PASSWORD";
-    msg = "Password required or incorrect";
-    break;
-  case FPDF_ERR_SECURITY:
-    code = "SECURITY";
-    msg = "Unsupported security scheme";
-    break;
-  case FPDF_ERR_PAGE:
-    code = "PAGE";
-    msg = "Page error";
-    break;
-  default:
-    code = "UNKNOWN";
-    msg = "Unknown error";
-    break;
-  }
-  return std::string(code) + ":" + msg;
-}
-
 // ---------------------------------------------------------------------------
 // LoadDocumentWorker — async document loading
 // ---------------------------------------------------------------------------
@@ -437,18 +404,21 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   auto envAlive = addonData->envAlive;
 
   // Layer 2: cleanup hook — fires during RunCleanup() after uv drain
-  env.AddCleanupHook([envAlive]() { envAlive->store(false); });
+  env.AddCleanupHook([addonData]() {
+    addonData->envAlive->store(false);
+    delete addonData;
+  });
 
-  if (!g_initialized) {
+  if (g_pdfium_refcount.fetch_add(1) == 0) {
     FPDF_InitLibrary();
-    g_initialized = true;
-
-    // clean up PDFium on environment teardown
-    env.AddCleanupHook([]() {
-      FPDF_DestroyLibrary();
-      g_initialized = false;
-    });
   }
+
+  // decrement ref count on environment teardown; destroy when last env exits
+  env.AddCleanupHook([]() {
+    if (g_pdfium_refcount.fetch_sub(1) == 1) {
+      FPDF_DestroyLibrary();
+    }
+  });
 
   // register classes — constructor refs are per-env (not static globals)
   // because each worker thread has its own V8 isolate

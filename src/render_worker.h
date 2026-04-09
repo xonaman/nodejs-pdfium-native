@@ -157,8 +157,10 @@ protected:
   void OnOK() override {
     Napi::Env env = Env();
     if (outputPath_.empty()) {
-      auto data = Napi::Buffer<uint8_t>::Copy(env, encodedData_.data(),
-                                              encodedData_.size());
+      auto *vec = new std::vector<uint8_t>(std::move(encodedData_));
+      auto data = Napi::Buffer<uint8_t>::New(
+          env, vec->data(), vec->size(),
+          [](Napi::Env, uint8_t *, std::vector<uint8_t> *v) { delete v; }, vec);
       deferred_.Resolve(data);
     } else {
       deferred_.Resolve(env.Undefined());
