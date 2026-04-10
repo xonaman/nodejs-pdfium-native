@@ -204,7 +204,6 @@ private:
     std::vector<uint8_t> pixels(static_cast<size_t>(width) *
                                 static_cast<size_t>(height) * outChannels);
 
-    // hoisted conditionals for auto-vectorization
     if (bitmapFormat == FPDFBitmap_Gray) {
       for (int y = 0; y < height; y++) {
         auto *src = static_cast<uint8_t *>(bufferData) + y * stride;
@@ -212,31 +211,11 @@ private:
         for (int x = 0; x < width; x++)
           dst[x] = src[x];
       }
-    } else if (keepAlpha) {
-      for (int y = 0; y < height; y++) {
-        auto *src = static_cast<uint8_t *>(bufferData) + y * stride;
-        auto *dst = pixels.data() + y * width * 4;
-        for (int x = 0; x < width; x++) {
-          dst[0] = src[2]; // R ← B
-          dst[1] = src[1]; // G
-          dst[2] = src[0]; // B ← R
-          dst[3] = src[3]; // A
-          src += srcBytesPerPixel;
-          dst += 4;
-        }
-      }
     } else {
-      for (int y = 0; y < height; y++) {
-        auto *src = static_cast<uint8_t *>(bufferData) + y * stride;
-        auto *dst = pixels.data() + y * width * 3;
-        for (int x = 0; x < width; x++) {
-          dst[0] = src[2]; // R ← B
-          dst[1] = src[1]; // G
-          dst[2] = src[0]; // B ← R
-          src += srcBytesPerPixel;
-          dst += 3;
-        }
-      }
+      for (int y = 0; y < height; y++)
+        convertBgraRow(static_cast<uint8_t *>(bufferData) + y * stride,
+                       pixels.data() + y * width * outChannels, width,
+                       srcBytesPerPixel, outChannels);
     }
 
     FPDFBitmap_Destroy(bitmap);

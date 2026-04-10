@@ -1,6 +1,7 @@
 #pragma once
 
 #include "napi_helpers.h"
+#include "pixel_convert.h"
 
 #include <atomic>
 #include <cstdio>
@@ -80,33 +81,10 @@ protected:
     std::vector<uint8_t> pixels(static_cast<size_t>(renderWidth_) *
                                 static_cast<size_t>(renderHeight_) * channels);
 
-    // hoisted conditional for auto-vectorization (same-stride inner loop)
-    if (transparent_) {
-      for (int y = 0; y < renderHeight_; y++) {
-        auto *src = static_cast<uint8_t *>(bufferData) + y * stride;
-        auto *dst = pixels.data() + y * renderWidth_ * 4;
-        for (int x = 0; x < renderWidth_; x++) {
-          dst[0] = src[2]; // R ← BGRA[2]
-          dst[1] = src[1]; // G ← BGRA[1]
-          dst[2] = src[0]; // B ← BGRA[0]
-          dst[3] = src[3]; // A ← BGRA[3]
-          src += 4;
-          dst += 4;
-        }
-      }
-    } else {
-      for (int y = 0; y < renderHeight_; y++) {
-        auto *src = static_cast<uint8_t *>(bufferData) + y * stride;
-        auto *dst = pixels.data() + y * renderWidth_ * 3;
-        for (int x = 0; x < renderWidth_; x++) {
-          dst[0] = src[2]; // R ← BGRA[2]
-          dst[1] = src[1]; // G ← BGRA[1]
-          dst[2] = src[0]; // B ← BGRA[0]
-          src += 4;
-          dst += 3;
-        }
-      }
-    }
+    for (int y = 0; y < renderHeight_; y++)
+      convertBgraRow(static_cast<uint8_t *>(bufferData) + y * stride,
+                     pixels.data() + y * renderWidth_ * channels, renderWidth_,
+                     4, channels);
 
     FPDFBitmap_Destroy(bitmap);
 
