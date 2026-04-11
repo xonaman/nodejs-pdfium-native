@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.4] - 2026-04-11
+
+### Fixed
+
+- Remove `%PDF-` header validation — PDFium already returns `FORMAT` error for invalid input; the pre-check was blocking PDF repair for files with damaged or missing headers
+- Ref-counted PDFium initialization (`atomic<int>` refcount) for multi-worker-thread safety — init on first env, destroy on last
+- Zero-copy `Buffer::New` with heap-allocated vector and release callback for render, image extraction, split, and merge operations (replaces `Buffer::Copy`)
+- Fix `ReadU16` minimum length check from 4 to 2 bytes
+- Fix `AddonData` memory leak in cleanup hook
+
+### Changed
+
+- Extract shared BGRA→RGB/RGBA pixel conversion into `pixel_convert.h` inline helper
+- Consolidate `GetPdfiumErrorMessage()` into `napi_helpers.h`, removing duplicates
+- Switch compiler optimization from `-Os` to `-O2`; replace `<filesystem>` with POSIX `access()`
+- Compact `pageAliveFlags` and optimize pixel conversion loops
+
 ## [0.5.3] - 2026-04-08
 
 ### Fixed
