@@ -1,6 +1,6 @@
 {
   "name": "pdfium-native",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "description": "Native Node.js bindings for PDFium",
   "license": "MIT",
   "type": "module",
@@ -77,7 +77,7 @@
     "lint:check": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepare": "husky"
+    "prepare": "husky && tsc"
   },
   "lint-staged": {
     "*.{ts,js,json,md,yaml,yml}": "prettier --write",
