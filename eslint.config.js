@@ -1,28 +1,29 @@
 import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import prettier from 'eslint-config-prettier';
-import prettierPlugin from 'eslint-plugin-prettier';
+import globals from 'globals';
 
 export default tseslint.config(
   { ignores: ['build/', 'deps/', 'dist/', 'node_modules/'] },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
-  prettier,
+  // Type-aware linting for the published library source. Catches the
+  // async-native-addon bug class (floating/misused promises, unsafe `any`).
   {
-    plugins: { prettier: prettierPlugin },
-    rules: {
-      'prettier/prettier': 'warn',
+    files: ['lib/**/*.ts'],
+    extends: [...tseslint.configs.recommendedTypeChecked],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
     },
   },
+  // Build/tooling scripts and examples run on Node without type info.
   {
-    files: ['scripts/**/*.mjs', 'examples/**/*.js'],
+    files: ['scripts/**/*.{js,mjs,cjs}', 'examples/**/*.{js,mjs,cjs}', 'test/**/*.{js,mjs,cjs}'],
     languageOptions: {
-      globals: {
-        console: 'readonly',
-        process: 'readonly',
-        fetch: 'readonly',
-        URL: 'readonly',
-      },
+      globals: globals.node,
     },
   },
   {
@@ -31,4 +32,6 @@ export default tseslint.config(
       'no-empty': 'off',
     },
   },
+  // Keep last: disable stylistic rules that conflict with Prettier.
+  prettier,
 );

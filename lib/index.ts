@@ -26,7 +26,9 @@ if (process.platform === 'win32') {
   process.env.LD_LIBRARY_PATH = `${addonDir}:${process.env.LD_LIBRARY_PATH ?? ''}`;
 }
 
-const addon: NativeAddon = require('../build/Release/pdfium.node');
+// The native addon is loaded through createRequire, so its export is `any` at
+// the module boundary; assert it to the typed surface once, here.
+const addon = require('../build/Release/pdfium.node') as NativeAddon;
 
 /**
  * Opens a PDF document from a Buffer or file path.

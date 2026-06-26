@@ -65,10 +65,11 @@ export class PDFiumPage {
   /** Returns the page object at the given index with type and bounds. */
   async getObject(index: number): Promise<PageObject> {
     const obj = await withConcurrency(() => this.native.getObject(index));
-    // wrap the native render function on image objects with the concurrency semaphore
+    // wrap the native render function on image objects with the concurrency
+    // semaphore. `obj` is already narrowed to ImagePageObject by the guard.
     if (obj.type === 'image') {
-      const nativeRender = (obj as ImagePageObject).render.bind(obj);
-      (obj as ImagePageObject).render = ((opts?: ImageRenderOptions) =>
+      const nativeRender = obj.render.bind(obj);
+      obj.render = ((opts?: ImageRenderOptions) =>
         withConcurrency(() => nativeRender(opts))) as ImagePageObject['render'];
     }
     return obj;
