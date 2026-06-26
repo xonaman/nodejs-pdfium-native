@@ -398,11 +398,11 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   env.SetInstanceData(addonData);
   auto envAlive = addonData->envAlive;
 
-  // Layer 2: cleanup hook — fires during RunCleanup() after uv drain
-  env.AddCleanupHook([addonData]() {
-    addonData->envAlive->store(false);
-    delete addonData;
-  });
+  // Layer 2: cleanup hook — fires during RunCleanup() after uv drain.
+  // SetInstanceData already installs a finalizer that deletes addonData on env
+  // teardown, so the hook must NOT delete it again (double free); it only flips
+  // the alive flag.
+  env.AddCleanupHook([addonData]() { addonData->envAlive->store(false); });
 
   if (g_pdfium_refcount.fetch_add(1) == 0) {
     FPDF_InitLibrary();
