@@ -2,6 +2,9 @@
   "targets": [
     {
       "target_name": "pdfium",
+      "variables": {
+        "cpp_std%": "c++20"
+      },
       "sources": [
         "src/pdfium_addon.cc",
         "src/stb_image_write.cc"
@@ -12,7 +15,7 @@
         "src"
       ],
       "defines": [
-        "NAPI_VERSION=8"
+        "NAPI_VERSION=9"
       ],
       "cflags!": [
         "-fno-exceptions"
@@ -27,7 +30,7 @@
         "-fno-exceptions"
       ],
       "cflags_cc": [
-        "-std=c++17",
+        "-std=<(cpp_std)",
         "-fvisibility=hidden"
       ],
       "conditions": [
@@ -36,7 +39,7 @@
           {
             "xcode_settings": {
               "GCC_ENABLE_CPP_EXCEPTIONS": "YES",
-              "CLANG_CXX_LANGUAGE_STANDARD": "c++17",
+              "CLANG_CXX_LANGUAGE_STANDARD": "<(cpp_std)",
               "GCC_SYMBOLS_PRIVATE_EXTERN": "YES",
               "DEAD_CODE_STRIPPING": "YES",
               "LLVM_LTO": "YES",
@@ -85,7 +88,7 @@
                 "Optimization": 2,
                 "WholeProgramOptimization": "true",
                 "AdditionalOptions": [
-                  "/std:c++17"
+                  "/std:<(cpp_std)"
                 ]
               },
               "VCLinkerTool": {
