@@ -1,0 +1,46 @@
+name: Windows Canary
+
+# Periodically re-tests whether windows-latest (currently VS 2026) can build
+# the addon again. While it can't, ci.yml/release.yml stay pinned to
+# windows-2022. A green run here is the signal to drop that pin.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-latest:
+    name: Build on windows-latest
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+
+      - name: Try building on windows-latest
+        id: build
+        continue-on-error: true
+        run: |
+          node scripts/download-pdfium.mjs
+          npx node-gyp rebuild
+          node scripts/bundle-lib.mjs
+          npm test
+
+      - name: Report
+        shell: bash
+        run: |
+          if [ "${{ steps.build.outcome }}" = "success" ]; then
+            echo "✅ windows-latest builds — you can drop the windows-2022 pin in ci.yml and release.yml." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ windows-latest still fails (VS 2026 C1001 ICE) — keep the windows-2022 pin." >> "$GITHUB_STEP_SUMMARY"
+          fi

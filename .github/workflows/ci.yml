@@ -6,9 +6,17 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     permissions:
       contents: read
     strategy:
@@ -16,18 +24,28 @@ jobs:
       matrix:
         # windows-2022 pins VS 2022; windows-latest moved to VS 2026 whose MSVC
         # hits an internal compiler error (C1001) building node-addon-api.
+        # The windows-canary workflow re-tests windows-latest weekly; drop this
+        # pin once it goes green.
         os: [ubuntu-latest, macos-latest, windows-2022]
         node-version: [22, 24]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: ${{ matrix.node-version }}
+          cache: npm
 
       - run: npm ci --ignore-scripts
       - run: npm run format:check
       - run: npm run lint:check
+      - run: npm run typecheck
+
+      - name: Cache PDFium binaries
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: deps
+          key: deps-${{ runner.os }}-${{ hashFiles('scripts/download-pdfium.mjs') }}
 
       - name: Download PDFium and build native addon
         run: |
