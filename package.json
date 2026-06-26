@@ -74,6 +74,7 @@
     "build:ts": "tsc",
     "prepublishOnly": "tsc",
     "download": "node scripts/download-pdfium.mjs",
+    "verify:checksums": "node scripts/verify-checksums.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",

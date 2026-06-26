@@ -1,0 +1,50 @@
+{
+  "pdfium": {
+    "version": "chromium/7749",
+    "origin": "https://github.com",
+    "baseUrl": "https://github.com/bblanchon/pdfium-binaries/releases/download",
+    "checksumSource": "Sigstore SLSA provenance attestation (pdfium-attestation.json) attached to the bblanchon/pdfium-binaries release",
+    "targets": {
+      "darwin-arm64": {
+        "asset": "pdfium-mac-arm64.tgz",
+        "sha256": "38be4f699283f7b890d709a52e85af219eb9969bd095a00b301a3a094c4bac0e"
+      },
+      "darwin-x64": {
+        "asset": "pdfium-mac-x64.tgz",
+        "sha256": "956433456e5c43acb1dfad4889260568c3ff6b7f626a4321671b2af94d85b1dd"
+      },
+      "linux-x64": {
+        "asset": "pdfium-linux-x64.tgz",
+        "sha256": "735abb28af7deab720dc54c8df3673a0a2a57bae9a0b16288842695fbd90a4b9"
+      },
+      "linux-arm64": {
+        "asset": "pdfium-linux-arm64.tgz",
+        "sha256": "0e0cbe3976336276bea33e5248e25b8da15e44e837cbd350ce2995f8866f48ec"
+      },
+      "linux-arm": {
+        "asset": "pdfium-linux-arm.tgz",
+        "sha256": "1eaf23df0bf87bc444f60020fc49193ee5c569e1fe5325610cbb04209f4513f4"
+      },
+      "linux-ppc64": {
+        "asset": "pdfium-linux-ppc64.tgz",
+        "sha256": "dfd82a718e8aca8d04fb5aabca0b7a3b3b838ab509c6eac45bfa0018ba8c1f06"
+      },
+      "linux-musl-x64": {
+        "asset": "pdfium-linux-musl-x64.tgz",
+        "sha256": "42036d6de407f989f96fc335e10f1e9b5653ad4b4cff781423074e99026d9fe7"
+      },
+      "linux-musl-arm64": {
+        "asset": "pdfium-linux-musl-arm64.tgz",
+        "sha256": "616f43abe9951613f9b49c9939d618db7ffcca98895c7dbfbafcd9cc4a537b05"
+      },
+      "win32-x64": {
+        "asset": "pdfium-win-x64.tgz",
+        "sha256": "a0f7ca96b3a1b2f509bb003f717147bc612e8a3f9b435cd8d1adb97c70cb2dbd"
+      },
+      "win32-arm64": {
+        "asset": "pdfium-win-arm64.tgz",
+        "sha256": "4aa3292b36dcb99c27ad8c4b48cf9d2f907802cd3f6170f9e4030e581780ff4e"
+      }
+    }
+  }
+}

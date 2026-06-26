@@ -6,11 +6,12 @@
  * Musl (Alpine) naming:    pdfium-v{version}-linux-musl-{arch}.tar.gz
  * Contents: build/Release/pdfium.node + build/Release/libpdfium.{dylib,so,dll}
  */
-import { execFileSync, execSync } from 'node:child_process';
+import { execSync } from 'node:child_process';
 import { createWriteStream, existsSync, mkdirSync, readFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { extractTarball } from './lib/integrity.mjs';
 
 const root = join(import.meta.dirname, '..');
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
@@ -57,7 +58,7 @@ async function tryDownload() {
     if (releaseUrl.origin !== releaseOrigin) {
       throw new Error(`Unexpected URL origin: ${releaseUrl.origin}`);
     }
-    const res = await fetch(releaseUrl, { redirect: 'follow' });
+    const res = await fetch(releaseUrl, { redirect: 'follow', signal: AbortSignal.timeout(60000) });
     if (!res.ok) {
       console.log(`No prebuilt binary found (HTTP ${res.status}), will compile from source.`);
       return false;
@@ -73,8 +74,8 @@ async function tryDownload() {
 
     await pipeline(Readable.fromWeb(body), fileStream);
 
-    // extract tar.gz into project root
-    execFileSync('tar', ['xzf', tmpTar, '-C', root], { stdio: 'inherit' });
+    // extract tar.gz into project root (hardened: no -P, no archived ownership)
+    extractTarball(tmpTar, root);
     unlinkSync(tmpTar);
 
     // verify the .node file exists

@@ -1,11 +1,9 @@
-import { execSync, execFileSync } from 'node:child_process';
-import { createWriteStream, mkdirSync, existsSync, rmSync } from 'node:fs';
-import { pipeline } from 'node:stream/promises';
-import { Readable } from 'node:stream';
+import { execSync } from 'node:child_process';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { downloadFile, extractTarball, loadManifest } from './lib/integrity.mjs';
 
-const PDFIUM_VERSION = 'chromium/7749';
-const BASE_URL = 'https://github.com/bblanchon/pdfium-binaries/releases/download';
+const { pdfium } = loadManifest();
 
 // detect musl libc (Alpine, Void, etc.)
 function isMusl() {
@@ -22,33 +20,16 @@ function isMusl() {
   }
 }
 
-const TARGETS = {
-  // macOS
-  'darwin-arm64': 'pdfium-mac-arm64',
-  'darwin-x64': 'pdfium-mac-x64',
-  // Linux (glibc)
-  'linux-x64': 'pdfium-linux-x64',
-  'linux-arm64': 'pdfium-linux-arm64',
-  'linux-arm': 'pdfium-linux-arm',
-  'linux-ppc64': 'pdfium-linux-ppc64',
-  // Linux (musl / Alpine)
-  'linux-musl-x64': 'pdfium-linux-musl-x64',
-  'linux-musl-arm64': 'pdfium-linux-musl-arm64',
-  // Windows
-  'win32-x64': 'pdfium-win-x64',
-  'win32-arm64': 'pdfium-win-arm64',
-};
-
 const platform = process.platform;
 // support cross-compilation via npm_config_arch (e.g. win32 x64 → arm64)
 const arch = process.env.npm_config_arch || process.arch;
 const musl = isMusl();
 const key = musl ? `${platform}-musl-${arch}` : `${platform}-${arch}`;
-const target = TARGETS[key];
+const entry = pdfium.targets[key];
 
-if (!target) {
+if (!entry) {
   console.error(`Unsupported platform: ${key}`);
-  console.error(`Supported: ${Object.keys(TARGETS).join(', ')}`);
+  console.error(`Supported: ${Object.keys(pdfium.targets).join(', ')}`);
   process.exit(1);
 }
 
@@ -59,27 +40,22 @@ if (existsSync(join(depsDir, 'include', 'fpdfview.h'))) {
   process.exit(0);
 }
 
-const encodedVersion = encodeURIComponent(PDFIUM_VERSION);
-const url = `${BASE_URL}/${encodedVersion}/${target}.tgz`;
-const tarball = join(import.meta.dirname, '..', `${target}.tgz`);
+// version is repo-controlled (native-deps.json); encode it so it can't escape
+// the release path, and downloadFile pins both the origin and the SHA-256.
+const url = `${pdfium.baseUrl}/${encodeURIComponent(pdfium.version)}/${entry.asset}`;
+const tarball = join(import.meta.dirname, '..', entry.asset);
 
-console.log(`Downloading PDFium ${PDFIUM_VERSION} for ${key}...`);
+console.log(`Downloading PDFium ${pdfium.version} for ${key}...`);
 console.log(`URL: ${url}`);
 
-const response = await fetch(url, { redirect: 'follow' });
-if (!response.ok) {
-  console.error(`Download failed: ${response.status} ${response.statusText}`);
-  process.exit(1);
-}
+await downloadFile(url, tarball, {
+  expectedSha256: entry.sha256,
+  allowedOrigin: pdfium.origin,
+});
 
-mkdirSync(join(import.meta.dirname, '..', 'deps'), { recursive: true });
-await pipeline(Readable.fromWeb(response.body), createWriteStream(tarball));
-
-console.log('Extracting...');
+console.log('Checksum verified. Extracting...');
 mkdirSync(depsDir, { recursive: true });
-execFileSync('tar', ['-xzf', tarball, '-C', depsDir], { stdio: 'inherit' });
-
-// clean up tarball
-rmSync(tarball);
+extractTarball(tarball, depsDir);
+rmSync(tarball, { force: true });
 
 console.log(`PDFium installed to ${depsDir}`);
