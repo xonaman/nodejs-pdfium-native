@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-27
+
 ### Added
 
 - `.nvmrc` and a `packageManager` field to pin the development toolchain
@@ -25,7 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Security
 
-- Added CodeQL analysis (C/C++ and JS/TS), OpenSSF Scorecard, Dependabot, and a security policy (`SECURITY.md`)
+- Added OpenSSF Scorecard analysis, Dependabot, and a security policy (`SECURITY.md`); CodeQL code scanning runs via GitHub's default setup
 - Supply chain: pin and verify the SHA-256 of every downloaded native dependency (`scripts/native-deps.json`) through a hardened downloader (timeout, retry, atomic writes, origin pinning); added an `npm run verify:checksums` tripwire
 
 ### Fixed
@@ -270,7 +272,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - GitHub Actions publish workflow with test gate
 - TypeScript type declarations for JS consumers
 
-[Unreleased]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.5.6...HEAD
+[Unreleased]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.5.6...v0.6.0
 [0.5.6]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.5.3...v0.5.4
