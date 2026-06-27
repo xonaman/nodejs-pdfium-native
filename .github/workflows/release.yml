@@ -22,7 +22,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-2022]
         node-version: [22, 24]
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
@@ -35,7 +35,7 @@ jobs:
       - run: npm run typecheck
 
       - name: Cache PDFium binaries
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: deps
           key: deps-${{ runner.os }}-${{ hashFiles('scripts/download-pdfium.mjs') }}
@@ -73,7 +73,7 @@ jobs:
             arch: arm64
             cross: true
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
@@ -84,7 +84,7 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Cache PDFium binaries
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: deps
           key: deps-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('scripts/download-pdfium.mjs') }}
@@ -142,14 +142,14 @@ jobs:
             docker-platform: linux/arm64
             image: node:22-alpine
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4
         with:
           platforms: ${{ matrix.docker-platform }}
 
       - name: Cache PDFium binaries
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: deps
           key: deps-linux-${{ matrix.platform-suffix || 'glibc' }}-${{ matrix.arch }}-${{ hashFiles('scripts/download-pdfium.mjs') }}
@@ -199,7 +199,7 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
