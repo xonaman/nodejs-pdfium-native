@@ -4,6 +4,42 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `.nvmrc` and a `packageManager` field to pin the development toolchain
+- `.editorconfig` for consistent cross-editor defaults
+- Vitest v8 coverage reporting (`npm run test:coverage`)
+- `typecheck` step wired into CI (`npm run typecheck`) for type-level regression coverage
+- Weekly `windows-latest` canary workflow to detect drift from the pinned `windows-2022` runner
+- `"./package.json"` to the package `exports` map
+
+### Changed
+
+- Raised the minimum supported Node.js to `>=22.0.0` (dropped EOL Node 20)
+- TypeScript config: `nodenext` module resolution, `es2023` target, and stricter flags (`verbatimModuleSyntax`, `exactOptionalPropertyTypes`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitOverride`, `noFallthroughCasesInSwitch`)
+- ESLint: type-aware linting for `lib/`, adopted the `globals` package, and dropped `eslint-plugin-prettier`
+- Native build: bumped the C++ standard to C++20 and Node-API to 9 (C++ standard now defined once via a gyp variable)
+- CI/CD hardening: pinned all GitHub Actions to commit SHAs, added npm and native-dependency caching, a concurrency group, job timeouts, and top-level least-privilege permissions
+
+### Security
+
+- Added CodeQL analysis (C/C++ and JS/TS), OpenSSF Scorecard, Dependabot, and a security policy (`SECURITY.md`)
+- Supply chain: pin and verify the SHA-256 of every downloaded native dependency (`scripts/native-deps.json`) through a hardened downloader (timeout, retry, atomic writes, origin pinning); added an `npm run verify:checksums` tripwire
+
+### Fixed
+
+- Windows build: upgraded `node-gyp` to 13 and dropped Node 20 from the CI matrix
+- Pinned Windows CI to `windows-2022` to avoid a VS 2026 (MSVC C1001) internal compiler error
+
+## [0.5.6] - 2026-06-26
+
+### Fixed
+
+- Fix double free of addon instance data on environment teardown
+- `npm audit` fix for transitive dev dependencies
+
 ## [0.5.5] - 2026-04-26
 
 ### Changed
@@ -62,23 +98,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 - `concurrency()` — get/set max concurrent native operations dispatched to the libuv thread pool (default: CPU cores, powered by p-limit)
 - Husky + lint-staged pre-commit hook (Prettier + ESLint on staged files)
-
-## [0.3.0] - 2026-03-31
-
-### Added
-
-- `ImagePageObject.render()` — extract and render embedded PDF images as PNG, JPEG, or raw stream bytes
-- Three render modes: intrinsic bitmap, rendered bitmap (with mask/matrix), and raw encoded stream
-- File output support for image rendering via `output` option
-- `objects()` async generator on `PDFiumPage` for iterating all page objects
-- Image dimension cap (`MAX_IMAGE_PIXELS = 256 MP`) to prevent allocation failures on huge embedded images
-- Negative object index guard in `RenderImageWorker`
-
-### Changed
-
-- **Breaking:** Default render format changed from JPEG to PNG for both `page.render()` and `image.render()` — use `{ format: 'jpeg' }` to restore previous behavior
-- Image `render()` binding moved from TypeScript layer to native C++ (`GetObjectWorker::OnOK`) for cleaner API
-- `PDFiumPage.getObject()` is now a direct passthrough to the native addon
 
 ## [0.3.0] - 2026-03-31
 
@@ -250,3 +269,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - ESLint + Prettier configuration
 - GitHub Actions publish workflow with test gate
 - TypeScript type declarations for JS consumers
+
+[Unreleased]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.5.6...HEAD
+[0.5.6]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.5.5...v0.5.6
+[0.5.5]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.5.4...v0.5.5
+[0.5.4]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.5.3...v0.5.4
+[0.5.3]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.5.2...v0.5.3
+[0.5.2]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.5.1...v0.5.2
+[0.5.1]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.2.4...v0.3.0
+[0.2.4]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.2.3...v0.2.4
+[0.2.3]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.2.0...v0.2.2
+[0.2.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.1.7...v0.2.0
+[0.1.7]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.1.6...v0.1.7
+[0.1.6]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.1.5...v0.1.6
+[0.1.5]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.1.4...v0.1.5
+[0.1.4]: https://github.com/xonaman/nodejs-pdfium-native/compare/0.1.3...v0.1.4
+[0.1.3]: https://github.com/xonaman/nodejs-pdfium-native/compare/0.1.2...0.1.3
+[0.1.2]: https://github.com/xonaman/nodejs-pdfium-native/releases/tag/0.1.2

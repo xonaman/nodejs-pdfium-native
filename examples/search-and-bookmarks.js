@@ -3,8 +3,8 @@ import { loadDocument, PDFiumPasswordError } from 'pdfium-native';
 const doc = await loadDocument('report.pdf');
 const page = await doc.getPage(0);
 
-// search for text (case-insensitive by default)
-const matches = page.search('invoice');
+// search for text (case-insensitive by default; search is async)
+const matches = await page.search('invoice');
 console.log(`Found ${matches.length} match(es) for "invoice"`);
 for (const match of matches) {
   console.log(
@@ -16,16 +16,17 @@ for (const match of matches) {
 }
 
 // case-sensitive search
-const exact = page.search('Invoice', { caseSensitive: true });
+const exact = await page.search('Invoice', { caseSensitive: true });
 console.log(`\nCase-sensitive: ${exact.length} match(es)`);
 
 page.close();
 
-// bookmarks
-const bookmarks = doc.getBookmarks();
+// bookmarks (also async)
+const bookmarks = await doc.getBookmarks();
 const printBookmarks = (items, indent = 0) => {
   for (const b of items) {
-    console.log(`${'  '.repeat(indent)}▸ ${b.title} (page ${b.pageIndex})`);
+    const target = b.pageIndex !== undefined ? `page ${b.pageIndex + 1}` : (b.url ?? 'action');
+    console.log(`${'  '.repeat(indent)}▸ ${b.title} (${target})`);
     if (b.children?.length) printBookmarks(b.children, indent + 1);
   }
 };

@@ -1,9 +1,10 @@
 # pdfium-native
 
+[![CI](https://github.com/xonaman/nodejs-pdfium-native/actions/workflows/ci.yml/badge.svg)](https://github.com/xonaman/nodejs-pdfium-native/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/pdfium-native)](https://www.npmjs.com/package/pdfium-native)
 [![Node.js](https://img.shields.io/node/v/pdfium-native)](https://nodejs.org)
 [![License](https://img.shields.io/npm/l/pdfium-native)](https://github.com/xonaman/nodejs-pdfium-native/blob/main/LICENSE)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-blue)]()
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-blue)](#-supported-platforms)
 
 Fast, native PDF rendering and text extraction for Node.js — powered by [PDFium](https://pdfium.googlesource.com/pdfium/), the same engine used in Chromium. Built as a C++ addon with N-API for ABI stability across Node.js versions.
 
@@ -40,7 +41,7 @@ doc.destroy();
 **🔒 Reliability**
 
 - Built on PDFium — the PDF engine used in Chromium
-- ABI-stable via N-API — works across Node.js 20–24 without recompilation
+- ABI-stable via N-API — works across Node.js 22–24 without recompilation
 - Password-protected PDFs supported out of the box
 
 ### 🎯 Use cases
@@ -90,7 +91,7 @@ doc.destroy();
 npm install pdfium-native
 ```
 
-Prebuilt binaries are available for all [supported platforms](#supported-platforms) — most installs require no compiler. If no prebuilt is available, the package falls back to compiling from source (requires a C++ toolchain: Xcode CLI tools on macOS, `build-essential` on Linux, Visual Studio on Windows).
+Prebuilt binaries are available for all [supported platforms](#-supported-platforms) — most installs require no compiler. If no prebuilt is available, the package falls back to compiling from source (requires a C++ toolchain: Xcode CLI tools on macOS, `build-essential` on Linux, Visual Studio on Windows).
 
 ## 🌍 Supported Platforms
 

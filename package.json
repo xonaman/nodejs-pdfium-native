@@ -44,7 +44,8 @@
     "binding.gyp",
     "README.md",
     "CHANGELOG.md",
-    "LICENSE"
+    "LICENSE",
+    "THIRD-PARTY-NOTICES.md"
   ],
   "repository": {
     "type": "git",
