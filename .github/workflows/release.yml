@@ -38,7 +38,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: deps
-          key: deps-${{ runner.os }}-${{ hashFiles('scripts/download-pdfium.mjs') }}
+          key: deps-${{ runner.os }}-${{ hashFiles('scripts/download-pdfium.mjs', 'scripts/native-deps.json') }}
 
       - name: Download PDFium and build native addon
         run: |
@@ -90,7 +90,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: deps
-          key: deps-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('scripts/download-pdfium.mjs') }}
+          key: deps-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('scripts/download-pdfium.mjs', 'scripts/native-deps.json') }}
 
       - name: Download PDFium
         run: node scripts/download-pdfium.mjs
@@ -155,7 +155,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: deps
-          key: deps-linux-${{ matrix.platform-suffix || 'glibc' }}-${{ matrix.arch }}-${{ hashFiles('scripts/download-pdfium.mjs') }}
+          key: deps-linux-${{ matrix.platform-suffix || 'glibc' }}-${{ matrix.arch }}-${{ hashFiles('scripts/download-pdfium.mjs', 'scripts/native-deps.json') }}
 
       - name: Build in Docker
         timeout-minutes: 60
