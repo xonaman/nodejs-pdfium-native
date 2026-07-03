@@ -9,6 +9,15 @@ updates:
     # until they have been public for a few days
     cooldown:
       default-days: 3
+    ignore:
+      # major toolchain bumps (TypeScript, @types/node) need a manual migration
+      # and currently break lint/typecheck; take minor and patch only
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
+      - dependency-name: '@types/node'
+        update-types:
+          - version-update:semver-major
     groups:
       dev-dependencies:
         dependency-type: development
