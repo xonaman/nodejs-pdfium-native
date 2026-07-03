@@ -9,18 +9,19 @@ updates:
     # until they have been public for a few days
     cooldown:
       default-days: 3
-    ignore:
-      # major toolchain bumps (TypeScript, @types/node) need a manual migration
-      # and currently break lint/typecheck; take minor and patch only
-      - dependency-name: typescript
-        update-types:
-          - version-update:semver-major
-      - dependency-name: '@types/node'
-        update-types:
-          - version-update:semver-major
     groups:
+      # isolate the TypeScript toolchain: a major bump needs a manual tsconfig
+      # migration, so surface it as its own PR rather than silently ignoring it
+      # or letting it block the other dev updates in the group
+      typescript-toolchain:
+        patterns:
+          - typescript
+          - '@types/node'
       dev-dependencies:
         dependency-type: development
+        exclude-patterns:
+          - typescript
+          - '@types/node'
       production-dependencies:
         dependency-type: production
   - package-ecosystem: github-actions
