@@ -4,6 +4,9 @@
     "lib": ["es2023"],
     "module": "nodenext",
     "moduleResolution": "nodenext",
+    // TS 6 no longer auto-includes ambient @types packages; declare node
+    // explicitly so process/Buffer/node: imports resolve
+    "types": ["node"],
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
