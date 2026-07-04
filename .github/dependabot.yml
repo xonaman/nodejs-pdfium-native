@@ -4,18 +4,16 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 99
     # supply-chain safety window: don't adopt freshly published releases
     # until they have been public for a few days
     cooldown:
       default-days: 3
     groups:
-      # majors can carry breaking changes (new lint rules, type-resolution
-      # shifts) that need manual work, so batch them on their own instead of
-      # blocking the safe minor/patch roll-ups
-      dependencies-major:
-        update-types:
-          - major
+      # group only minor/patch; majors fall through to one individual PR each
+      # (Dependabot default). A dedicated majors group is intentionally avoided:
+      # an open group PR suppresses the second group's PR
+      # (dependabot/dependabot-core#10492)
       dev-dependencies:
         dependency-type: development
         update-types:
