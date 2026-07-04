@@ -10,20 +10,22 @@ updates:
     cooldown:
       default-days: 3
     groups:
-      # isolate the TypeScript toolchain: a major bump needs a manual tsconfig
-      # migration, so surface it as its own PR rather than silently ignoring it
-      # or letting it block the other dev updates in the group
-      typescript-toolchain:
-        patterns:
-          - typescript
-          - '@types/node'
+      # majors can carry breaking changes (new lint rules, type-resolution
+      # shifts) that need manual work, so batch them on their own instead of
+      # blocking the safe minor/patch roll-ups
+      dependencies-major:
+        update-types:
+          - major
       dev-dependencies:
         dependency-type: development
-        exclude-patterns:
-          - typescript
-          - '@types/node'
+        update-types:
+          - minor
+          - patch
       production-dependencies:
         dependency-type: production
+        update-types:
+          - minor
+          - patch
   - package-ecosystem: github-actions
     directory: /
     schedule:
