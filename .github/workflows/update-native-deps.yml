@@ -1,0 +1,49 @@
+name: Update native dependencies
+
+on:
+  schedule:
+    # weekly, Monday 06:00 UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24
+
+      - name: Check upstream releases and re-pin
+        id: update
+        run: node scripts/update-native-deps.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Re-verify pinned checksums against upstream
+        if: steps.update.outputs.changed == 'true'
+        run: node scripts/verify-checksums.mjs --all
+
+      - name: Open pull request
+        if: steps.update.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          # a PAT here lets the PR trigger CI; GITHUB_TOKEN-created PRs do not
+          token: ${{ secrets.NATIVE_DEPS_PAT || secrets.GITHUB_TOKEN }}
+          branch: chore/native-deps-update
+          delete-branch: true
+          add-paths: scripts/native-deps.json
+          commit-message: 'chore(deps): update native dependencies'
+          title: 'chore(deps): update native dependencies'
+          body: ${{ steps.update.outputs.body }}
