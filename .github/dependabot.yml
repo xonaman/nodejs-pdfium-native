@@ -9,6 +9,12 @@ updates:
     # until they have been public for a few days
     cooldown:
       default-days: 3
+    # hold @types/node at the supported Node major; a types major ahead of the
+    # runtime lets code use APIs that don't exist there yet still type-check
+    ignore:
+      - dependency-name: '@types/node'
+        update-types:
+          - version-update:semver-major
     groups:
       # group only minor/patch; majors fall through to one individual PR each
       # (Dependabot default). A dedicated majors group is intentionally avoided:
