@@ -121,7 +121,7 @@ if (changes.length === 0) {
       '',
       summary,
       '',
-      'Checksums were recomputed from the upstream release assets and independently re-verified by `verify-checksums`.',
+      'Checksums were recomputed from the upstream release assets. `verify-checksums` re-downloads each asset and confirms it matches the recorded hash — a consistency check against the same source, not independent provenance.',
     ].join('\n');
     appendFileSync(process.env.GITHUB_OUTPUT, 'changed=true\n');
     appendFileSync(process.env.GITHUB_OUTPUT, `body<<PR_BODY_EOF\n${body}\nPR_BODY_EOF\n`);
