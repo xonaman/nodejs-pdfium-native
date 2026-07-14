@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-07-15
+
+### Security
+
+- Verify the downloaded prebuilt binary against a per-platform SHA-256 pin shipped in the package before use, falling back to the checksum-pinned source build on mismatch or a missing pin. Closes the prebuilt-binary trust gap where a swapped GitHub release asset could be executed unverified.
+
+### Changed
+
+- The `update-native-deps` PR body now describes `verify-checksums` as a consistency check against the same source rather than "independent" verification.
+
+### Added
+
+- Hermetic test coverage for prebuilt verification and manifest generation (`test/prebuild.test.ts`).
+
 ## [0.6.0] - 2026-06-27
 
 ### Added
@@ -272,7 +286,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - GitHub Actions publish workflow with test gate
 - TypeScript type declarations for JS consumers
 
-[Unreleased]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.5.6...v0.6.0
 [0.5.6]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.5.4...v0.5.5
