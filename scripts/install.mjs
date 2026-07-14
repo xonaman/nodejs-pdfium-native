@@ -11,7 +11,7 @@ import { createWriteStream, existsSync, mkdirSync, readFileSync, unlinkSync } fr
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { extractTarball, sha256File } from './lib/integrity.mjs';
+import { extractTarball, verifyPrebuild } from './lib/integrity.mjs';
 
 const root = join(import.meta.dirname, '..');
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
@@ -89,19 +89,17 @@ async function tryDownload() {
 
     // verify the prebuilt against the pinned checksum before trusting it
     const pinKey = `${platformKey}-${arch}`;
-    const expected = loadPrebuildPins()[pinKey];
-    if (!expected) {
-      console.log(
-        `No pinned checksum for ${pinKey}; refusing unverified prebuilt, will compile from source.`,
-      );
-      unlinkSync(tmpTar);
-      return false;
-    }
-    const actual = await sha256File(tmpTar);
-    if (actual !== expected.toLowerCase()) {
-      console.log(
-        `Prebuilt checksum mismatch for ${pinKey} (expected ${expected}, got ${actual}); will compile from source.`,
-      );
+    const check = await verifyPrebuild(tmpTar, pinKey, loadPrebuildPins());
+    if (!check.ok) {
+      if (check.reason === 'no-pin') {
+        console.log(
+          `No pinned checksum for ${pinKey}; refusing unverified prebuilt, will compile from source.`,
+        );
+      } else {
+        console.log(
+          `Prebuilt checksum mismatch for ${pinKey} (expected ${check.expected}, got ${check.actual}); will compile from source.`,
+        );
+      }
       unlinkSync(tmpTar);
       return false;
     }

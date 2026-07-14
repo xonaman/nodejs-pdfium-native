@@ -11,45 +11,49 @@
  *
  * Usage: node scripts/gen-prebuild-manifest.mjs <artifacts-dir>
  */
-import { createHash } from 'node:crypto';
-import { createReadStream, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { pipeline } from 'node:stream/promises';
+import { pathToFileURL } from 'node:url';
+import { sha256File } from './lib/integrity.mjs';
 
-const artifactsDir = process.argv[2];
-if (!artifactsDir) {
-  console.error('usage: node scripts/gen-prebuild-manifest.mjs <artifacts-dir>');
-  process.exit(1);
+/**
+ * Map every "<prefix>-v<version>-<platform>-<arch>.tar.gz" in `artifactsDir` to
+ * its SHA-256, keyed by "<platform>-<arch>" (matching install.mjs's lookup).
+ *
+ * @param {string} artifactsDir
+ * @param {string} version
+ * @returns {Promise<Record<string, string>>}
+ */
+export async function computePins(artifactsDir, version) {
+  // strip the "<prefix>-v<version>-" head and ".tar.gz" tail to recover the key
+  const headRe = new RegExp('^.*-v' + version.replace(/[.]/g, '\\.') + '-');
+  const files = readdirSync(artifactsDir)
+    .filter((f) => f.endsWith('.tar.gz'))
+    .sort();
+  const pins = {};
+  for (const file of files) {
+    const key = file.replace(/\.tar\.gz$/, '').replace(headRe, '');
+    pins[key] = await sha256File(join(artifactsDir, file));
+  }
+  return pins;
 }
 
-const root = join(import.meta.dirname, '..');
-const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-
-// Tarballs are named "<prefix>-v<version>-<platform>-<arch>.tar.gz"; strip the
-// "<prefix>-v<version>-" head and ".tar.gz" tail to recover the platform key.
-const headRe = new RegExp('^.*-v' + version.replace(/[.]/g, '\\.') + '-');
-
-async function sha256File(path) {
-  const hash = createHash('sha256');
-  await pipeline(createReadStream(path), hash);
-  return hash.digest('hex');
+// CLI entrypoint (skipped when this module is imported, e.g. by tests)
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  const artifactsDir = process.argv[2];
+  if (!artifactsDir) {
+    console.error('usage: node scripts/gen-prebuild-manifest.mjs <artifacts-dir>');
+    process.exit(1);
+  }
+  const root = join(import.meta.dirname, '..');
+  const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  const pins = await computePins(artifactsDir, version);
+  if (Object.keys(pins).length === 0) {
+    console.error(`No .tar.gz artifacts found in ${artifactsDir}`);
+    process.exit(1);
+  }
+  for (const [key, sha] of Object.entries(pins)) console.log(`  ${key}  ${sha}`);
+  const out = join(root, 'scripts', 'prebuilds.json');
+  writeFileSync(out, JSON.stringify(pins, null, 2) + '\n');
+  console.log(`Wrote ${Object.keys(pins).length} prebuild pin(s) to ${out}`);
 }
-
-const files = readdirSync(artifactsDir)
-  .filter((f) => f.endsWith('.tar.gz'))
-  .sort();
-if (files.length === 0) {
-  console.error(`No .tar.gz artifacts found in ${artifactsDir}`);
-  process.exit(1);
-}
-
-const pins = {};
-for (const file of files) {
-  const key = file.replace(/\.tar\.gz$/, '').replace(headRe, '');
-  pins[key] = await sha256File(join(artifactsDir, file));
-  console.log(`  ${key}  ${pins[key]}`);
-}
-
-const out = join(root, 'scripts', 'prebuilds.json');
-writeFileSync(out, JSON.stringify(pins, null, 2) + '\n');
-console.log(`Wrote ${Object.keys(pins).length} prebuild pin(s) to ${out}`);

@@ -32,6 +32,29 @@ export async function sha256File(path) {
   return hash.digest('hex');
 }
 
+/**
+ * Decide whether a downloaded prebuilt tarball is trusted by comparing its
+ * SHA-256 to the pin recorded for `pinKey` in `pins` (scripts/prebuilds.json).
+ * Returns a discriminated result so the installer can log and fall back to a
+ * source build instead of running an unverified binary.
+ *
+ * @param {string} tarPath
+ * @param {string} pinKey  e.g. "darwin-arm64" / "linux-musl-x64"
+ * @param {Record<string, string>} pins
+ * @returns {Promise<{ok: true, pinKey: string, sha256: string}
+ *   | {ok: false, reason: 'no-pin', pinKey: string}
+ *   | {ok: false, reason: 'mismatch', pinKey: string, expected: string, actual: string}>}
+ */
+export async function verifyPrebuild(tarPath, pinKey, pins) {
+  const expected = pins[pinKey];
+  if (!expected) return { ok: false, reason: 'no-pin', pinKey };
+  const actual = await sha256File(tarPath);
+  if (actual !== expected.toLowerCase()) {
+    return { ok: false, reason: 'mismatch', pinKey, expected, actual };
+  }
+  return { ok: true, pinKey, sha256: actual };
+}
+
 /** Read the native-dependency manifest (scripts/native-deps.json). */
 export function loadManifest() {
   return JSON.parse(readFileSync(join(import.meta.dirname, '..', 'native-deps.json'), 'utf8'));
