@@ -212,15 +212,18 @@ jobs:
 
       - run: npm ci --ignore-scripts
 
-      - name: Publish to npm
-        run: npm publish --provenance
-
       - name: Download all prebuild artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: prebuild-*
           path: artifacts
           merge-multiple: true
+
+      - name: Generate prebuild checksum manifest
+        run: node scripts/gen-prebuild-manifest.mjs artifacts
+
+      - name: Publish to npm
+        run: npm publish --provenance
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4

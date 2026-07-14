@@ -11,11 +11,24 @@ import { createWriteStream, existsSync, mkdirSync, readFileSync, unlinkSync } fr
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { extractTarball } from './lib/integrity.mjs';
+import { extractTarball, sha256File } from './lib/integrity.mjs';
 
 const root = join(import.meta.dirname, '..');
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 const version = pkg.version;
+
+// Per-platform SHA-256 pins for the prebuilt tarballs, generated at release
+// time (scripts/gen-prebuild-manifest.mjs) and shipped inside this package.
+// The prebuilt binary is the code that actually runs, so it is verified against
+// this pin before use; a swapped release asset fails the check and we fall back
+// to the checksum-pinned source build.
+function loadPrebuildPins() {
+  try {
+    return JSON.parse(readFileSync(join(import.meta.dirname, 'prebuilds.json'), 'utf8'));
+  } catch {
+    return {};
+  }
+}
 
 // validate version to prevent SSRF via malicious package.json
 if (!/^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$/.test(version)) {
@@ -73,6 +86,25 @@ async function tryDownload() {
     if (!body) return false;
 
     await pipeline(Readable.fromWeb(body), fileStream);
+
+    // verify the prebuilt against the pinned checksum before trusting it
+    const pinKey = `${platformKey}-${arch}`;
+    const expected = loadPrebuildPins()[pinKey];
+    if (!expected) {
+      console.log(
+        `No pinned checksum for ${pinKey}; refusing unverified prebuilt, will compile from source.`,
+      );
+      unlinkSync(tmpTar);
+      return false;
+    }
+    const actual = await sha256File(tmpTar);
+    if (actual !== expected.toLowerCase()) {
+      console.log(
+        `Prebuilt checksum mismatch for ${pinKey} (expected ${expected}, got ${actual}); will compile from source.`,
+      );
+      unlinkSync(tmpTar);
+      return false;
+    }
 
     // extract tar.gz into project root (hardened: no -P, no archived ownership)
     extractTarball(tmpTar, root);
