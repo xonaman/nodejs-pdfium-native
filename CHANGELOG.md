@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-05
+
 ### Added
 
 - Embedded-file (attachment) API on `PDFiumDocument`: `getAttachments()` lists every embedded file in the `/EmbeddedFiles` name tree (name, MIME type, dates) without decoding streams, and `getAttachment(index, options?)` reads the raw bytes as a `Buffer` (or writes them to `options.output`). Wraps PDFium's `FPDFDoc_GetAttachment` / `FPDFAttachment_GetFile`. This closes the gap where `metadata.attachmentCount` could detect attachments but nothing could read them — enabling extraction of the embedded `factur-x.xml` / `zugferd-invoice.xml` / `xrechnung.xml` from ZUGFeRD / Factur-X / XRechnung PDF/A-3 e-invoices.
@@ -291,7 +293,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - GitHub Actions publish workflow with test gate
 - TypeScript type declarations for JS consumers
 
-[Unreleased]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.5.6...v0.6.0
 [0.5.6]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.5.5...v0.5.6
