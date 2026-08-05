@@ -444,6 +444,55 @@ async function createBorderAnnotationPdf() {
   return doc.save();
 }
 
+// --- ZUGFeRD / Factur-X PDF/A-3 with an embedded invoice XML ---
+// The structured invoice (factur-x.xml) is embedded in the /EmbeddedFiles name
+// tree; a second plain-text attachment exercises multi-attachment enumeration.
+const FACTUR_X_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100" xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100">
+  <rsm:ExchangedDocumentContext>
+    <ram:GuidelineSpecifiedDocumentContextParameter>
+      <ram:ID>urn:cen.eu:en16931:2017</ram:ID>
+    </ram:GuidelineSpecifiedDocumentContextParameter>
+  </rsm:ExchangedDocumentContext>
+  <rsm:ExchangedDocument>
+    <ram:ID>RE-2025-0001</ram:ID>
+    <ram:TypeCode>380</ram:TypeCode>
+    <ram:IssueDateTime>
+      <ram:DateTimeString format="102">20250101</ram:DateTimeString>
+    </ram:IssueDateTime>
+  </rsm:ExchangedDocument>
+</rsm:CrossIndustryInvoice>
+`;
+
+async function createEInvoicePdf() {
+  const { AFRelationship } = await import('pdf-lib');
+  const doc = await PDFDocument.create();
+  doc.setTitle('ZUGFeRD / Factur-X invoice');
+  doc.setProducer('pdfium-native test');
+  const page = doc.addPage([612, 792]);
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  page.drawText('Invoice RE-2025-0001', { x: 50, y: 700, size: 16, font });
+  page.drawText('Structured data embedded as factur-x.xml', { x: 50, y: 670, size: 11, font });
+
+  await doc.attach(Buffer.from(FACTUR_X_XML, 'utf8'), 'factur-x.xml', {
+    mimeType: 'text/xml',
+    description: 'Factur-X invoice',
+    creationDate: new Date('2025-01-01T12:00:00Z'),
+    modificationDate: new Date('2025-01-01T12:00:00Z'),
+    afRelationship: AFRelationship.Alternative,
+  });
+
+  await doc.attach(Buffer.from('Human-readable notes.\n', 'utf8'), 'notes.txt', {
+    mimeType: 'text/plain',
+    description: 'Supplementary notes',
+    creationDate: new Date('2025-01-01T12:00:00Z'),
+    modificationDate: new Date('2025-01-01T12:00:00Z'),
+    afRelationship: AFRelationship.Supplement,
+  });
+
+  return doc.save();
+}
+
 // --- PDF with form fields ---
 async function createFormFieldsPdf() {
   const doc = await PDFDocument.create();
@@ -518,6 +567,7 @@ const fixtures = [
   ['rich-bookmarks.pdf', createRichBookmarkPdf],
   ['border-annotations.pdf', createBorderAnnotationPdf],
   ['form-fields.pdf', createFormFieldsPdf],
+  ['einvoice-zugferd.pdf', createEInvoicePdf],
 ];
 
 for (const [name, generator] of fixtures) {

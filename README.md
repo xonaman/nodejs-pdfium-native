@@ -65,6 +65,7 @@ doc.destroy();
 | Bookmarks       | ✅                   | ❌                  | ✅                |
 | Links           | ✅                   | ❌                  | ✅                |
 | Form fields     | ✅                   | ❌                  | ✅                |
+| Attachments     | ✅ Embedded files    | ❌                  | ✅                |
 | Async I/O       | ✅ libuv workers     | ❌ Sync             | ❌ Main thread    |
 | Platforms       | macOS/Linux/Windows  | Any (WASM)          | Any               |
 
@@ -215,6 +216,46 @@ interface Bookmark {
   children?: Bookmark[];
 }
 ```
+
+#### `getAttachments()`
+
+Lists every embedded file (attachment) in the document's `/EmbeddedFiles` name tree. Returns `Promise<Attachment[]>`. This reads only dictionary metadata — it does **not** decode the file streams; use [`getAttachment(index)`](#getattachmentindex-options) to read the bytes.
+
+```typescript
+interface Attachment {
+  index: number; // 0-based index in the embedded-files name tree
+  name: string; // file name, e.g. 'factur-x.xml'
+  mimeType: string; // /Subtype, e.g. 'text/xml' ('' if the PDF omits it)
+  creationDate?: string; // PDF date string, e.g. 'D:20250101120000Z'
+  modDate?: string; // PDF date string
+}
+```
+
+#### `getAttachment(index, options?)`
+
+Reads the raw bytes of the attachment at `index`. Returns `Promise<Buffer>`, or `Promise<void>` when `options.output` is a file path (the bytes are written there instead).
+
+```typescript
+// Extract the embedded XML from a ZUGFeRD / Factur-X / XRechnung PDF/A-3 e-invoice.
+// The PDF stays the display artifact; the XML is the structured source of truth.
+const E_INVOICE_NAMES = ['factur-x.xml', 'zugferd-invoice.xml', 'xrechnung.xml'];
+
+const doc = await loadDocument('invoice.pdf');
+const attachments = await doc.getAttachments();
+const entry = attachments.find((a) => E_INVOICE_NAMES.includes(a.name.toLowerCase()));
+
+if (entry) {
+  const xml = await doc.getAttachment(entry.index); // Buffer of the exact embedded bytes
+  console.log(xml.toString('utf8'));
+}
+
+// or write straight to disk:
+await doc.getAttachment(0, { output: 'attachment.xml' });
+
+doc.destroy();
+```
+
+Rejects if `index` is out of range (`0 … attachmentCount - 1`). `metadata.attachmentCount` gives the count without loading anything.
 
 #### `destroy()`
 

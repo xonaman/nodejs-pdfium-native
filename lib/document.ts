@@ -1,6 +1,12 @@
 import { withConcurrency } from './concurrency.js';
 import { PDFiumPage } from './page.js';
-import type { Bookmark, DocumentMetadata, NativeDocument } from './types.js';
+import type {
+  Attachment,
+  Bookmark,
+  DocumentMetadata,
+  GetAttachmentOptions,
+  NativeDocument,
+} from './types.js';
 
 /**
  * A loaded PDF document.
@@ -37,5 +43,32 @@ export class PDFiumDocument {
   /** Returns the bookmark/outline tree. */
   getBookmarks(): Promise<Bookmark[]> {
     return withConcurrency(() => this.native.getBookmarks());
+  }
+
+  /**
+   * Returns metadata for every embedded file (attachment) in the document —
+   * name, MIME type and dates — without reading the file bytes.
+   *
+   * For ZUGFeRD / Factur-X / XRechnung PDF/A-3 e-invoices, the structured
+   * invoice lives here (e.g. `factur-x.xml`); pass its `index` to
+   * {@link getAttachment} to read the bytes.
+   */
+  getAttachments(): Promise<Attachment[]> {
+    return withConcurrency(() => this.native.getAttachments());
+  }
+
+  /** Writes the attachment at `index` to a file path. */
+  getAttachment(index: number, options: GetAttachmentOptions & { output: string }): Promise<void>;
+  /** Reads the raw bytes of the attachment at `index`. */
+  getAttachment(index: number, options?: GetAttachmentOptions): Promise<Buffer>;
+  getAttachment(index: number, options?: GetAttachmentOptions): Promise<Buffer | void> {
+    // Guard non-integer indices here: the native layer coerces with ToInt32, so
+    // a NaN/Infinity/fractional index (e.g. from `Number(userInput)`) would
+    // otherwise silently alias onto a valid attachment and return the wrong
+    // embedded file. Integer out-of-range is still handled natively.
+    if (!Number.isInteger(index)) {
+      return Promise.reject(new RangeError(`Attachment index must be an integer, got ${index}`));
+    }
+    return withConcurrency(() => this.native.getAttachment(index, options?.output));
   }
 }

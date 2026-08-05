@@ -1,5 +1,6 @@
 #pragma once
 
+#include "attachments_worker.h"
 #include "bookmarks_worker.h"
 #include "page.h"
 
@@ -21,6 +22,8 @@ public:
         {
             InstanceMethod<&PDFiumDocument::GetPage>("getPage"),
             InstanceMethod<&PDFiumDocument::GetBookmarks>("getBookmarks"),
+            InstanceMethod<&PDFiumDocument::GetAttachments>("getAttachments"),
+            InstanceMethod<&PDFiumDocument::GetAttachment>("getAttachment"),
             InstanceMethod<&PDFiumDocument::Destroy>("destroy"),
         });
   }
@@ -77,6 +80,51 @@ private:
       return env.Null();
 
     auto *worker = new GetBookmarksWorker(env, doc_, docAlive_);
+    auto promise = worker->Promise();
+    worker->Queue();
+    return promise;
+  }
+
+  /**
+   * Returns metadata for every embedded file / attachment (async).
+   */
+  Napi::Value GetAttachments(const Napi::CallbackInfo &info) {
+    Napi::Env env = info.Env();
+    EnsureOpen(env);
+    if (env.IsExceptionPending())
+      return env.Null();
+
+    auto *worker = new GetAttachmentsWorker(env, doc_, docAlive_);
+    auto promise = worker->Promise();
+    worker->Queue();
+    return promise;
+  }
+
+  /**
+   * Reads the raw bytes of the attachment at `index` (async). Resolves to a
+   * Buffer, or writes to an optional output path and resolves to undefined.
+   */
+  Napi::Value GetAttachment(const Napi::CallbackInfo &info) {
+    Napi::Env env = info.Env();
+    EnsureOpen(env);
+    if (env.IsExceptionPending())
+      return env.Null();
+
+    if (info.Length() < 1 || !info[0].IsNumber()) {
+      Napi::TypeError::New(env, "Expected attachment index")
+          .ThrowAsJavaScriptException();
+      return env.Null();
+    }
+
+    int index = info[0].As<Napi::Number>().Int32Value();
+
+    std::string outputPath;
+    if (info.Length() > 1 && info[1].IsString()) {
+      outputPath = info[1].As<Napi::String>().Utf8Value();
+    }
+
+    auto *worker = new GetAttachmentDataWorker(env, doc_, index,
+                                               std::move(outputPath), docAlive_);
     auto promise = worker->Promise();
     worker->Queue();
     return promise;

@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Added
+
+- Embedded-file (attachment) API on `PDFiumDocument`: `getAttachments()` lists every embedded file in the `/EmbeddedFiles` name tree (name, MIME type, dates) without decoding streams, and `getAttachment(index, options?)` reads the raw bytes as a `Buffer` (or writes them to `options.output`). Wraps PDFium's `FPDFDoc_GetAttachment` / `FPDFAttachment_GetFile`. This closes the gap where `metadata.attachmentCount` could detect attachments but nothing could read them — enabling extraction of the embedded `factur-x.xml` / `zugferd-invoice.xml` / `xrechnung.xml` from ZUGFeRD / Factur-X / XRechnung PDF/A-3 e-invoices.
+- `Attachment` and `GetAttachmentOptions` types are exported from the package root.
+
 ## [0.6.1] - 2026-07-15
 
 ### Security

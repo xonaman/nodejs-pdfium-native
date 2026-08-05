@@ -384,6 +384,24 @@ export interface DocumentMetadata {
   changingId?: string;
 }
 
+export interface Attachment {
+  /** 0-based index of the attachment in the document's embedded-files name tree. */
+  index: number;
+  /** File name as stored in the /EmbeddedFiles name tree (e.g. 'factur-x.xml'). */
+  name: string;
+  /** MIME type (/Subtype), e.g. 'text/xml'. Empty string if the PDF omits it. */
+  mimeType: string;
+  /** Creation date as a PDF date string (e.g. 'D:20250101120000Z'). Absent if not set. */
+  creationDate?: string;
+  /** Modification date as a PDF date string. Absent if not set. */
+  modDate?: string;
+}
+
+export interface GetAttachmentOptions {
+  /** Write the attachment bytes to this file path instead of returning a Buffer. */
+  output?: string;
+}
+
 // native addon bindings (internal)
 export interface NativePage {
   readonly number: number;
@@ -411,6 +429,8 @@ export interface NativeDocument {
   readonly metadata: DocumentMetadata;
   getPage(index: number): Promise<NativePage>;
   getBookmarks(): Promise<Bookmark[]>;
+  getAttachments(): Promise<Attachment[]>;
+  getAttachment(index: number, outputPath?: string): Promise<Buffer | undefined>;
   destroy(): void;
 }
 
