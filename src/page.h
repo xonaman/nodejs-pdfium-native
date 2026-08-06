@@ -35,6 +35,8 @@ public:
             InstanceMethod<&PDFiumPage::GetLinks>("getLinks"),
             InstanceMethod<&PDFiumPage::Search>("search"),
             InstanceMethod<&PDFiumPage::GetAnnotations>("getAnnotations"),
+            InstanceMethod<&PDFiumPage::GetAnnotationAttachment>(
+                "getAnnotationAttachment"),
             InstanceMethod<&PDFiumPage::GetFormFields>("getFormFields"),
             InstanceMethod<&PDFiumPage::Close>("close"),
         });
@@ -340,6 +342,36 @@ private:
       return env.Null();
 
     auto *worker = new GetAnnotationsWorker(env, page_, alive_, docAlive_);
+    auto promise = worker->Promise();
+    worker->Queue();
+    return promise;
+  }
+
+  /**
+   * Reads the embedded file of the FileAttachment annotation at `index`
+   * (async). Resolves to a Buffer, or writes to an optional output path and
+   * resolves to undefined.
+   */
+  Napi::Value GetAnnotationAttachment(const Napi::CallbackInfo &info) {
+    Napi::Env env = info.Env();
+    EnsureOpen(env);
+    if (env.IsExceptionPending())
+      return env.Null();
+
+    if (info.Length() < 1 || !info[0].IsNumber()) {
+      Napi::TypeError::New(env, "Expected annotation index")
+          .ThrowAsJavaScriptException();
+      return env.Null();
+    }
+
+    int index = info[0].As<Napi::Number>().Int32Value();
+
+    std::string outputPath;
+    if (info.Length() > 1 && info[1].IsString())
+      outputPath = info[1].As<Napi::String>().Utf8Value();
+
+    auto *worker = new GetAnnotationAttachmentWorker(
+        env, page_, index, std::move(outputPath), alive_, docAlive_);
     auto promise = worker->Promise();
     worker->Queue();
     return promise;

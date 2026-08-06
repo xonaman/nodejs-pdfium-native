@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-06
+
+### Added
+
+- File-attachment annotation extraction on `PDFiumPage`: `getAnnotationAttachment(index, options?)` reads the embedded file of a page-level `/FileAttachment` (paperclip) annotation as a `Buffer` (or writes it to `options.output`), wrapping PDFium's `FPDFAnnot_GetFileAttachment` / `FPDFAttachment_GetFile`. This complements the document-level `getAttachment()`: file-attachment annotations live on a page, not in the `/EmbeddedFiles` name tree, so the two cover the two distinct ways PDFium exposes attached files.
+- `Annotation` objects now include `index` (the 0-based page annotation index, used to address `getAnnotationAttachment`) and, for `'fileattachment'` annotations, `fileName` (the embedded file's name).
+
+### Fixed
+
+- `document.getAttachment(index)` (added in 0.7.0) and `page.getAnnotationAttachment(index)` now reject indices outside the signed 32-bit range instead of letting them through. The previous `Number.isInteger` guard missed large integers (e.g. `2**32 + 1`), which the native `ToInt32` coercion would silently wrap onto a valid — but different — entry, resolving with the wrong file instead of erroring. Both indices are now validated with a shared 32-bit-aware check.
+
 ## [0.7.0] - 2026-08-05
 
 ### Added
@@ -293,7 +304,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - GitHub Actions publish workflow with test gate
 - TypeScript type declarations for JS consumers
 
-[Unreleased]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.5.6...v0.6.0

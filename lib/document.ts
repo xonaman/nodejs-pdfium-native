@@ -1,5 +1,6 @@
 import { withConcurrency } from './concurrency.js';
 import { PDFiumPage } from './page.js';
+import { isNativeIndex } from './validate.js';
 import type {
   Attachment,
   Bookmark,
@@ -62,12 +63,15 @@ export class PDFiumDocument {
   /** Reads the raw bytes of the attachment at `index`. */
   getAttachment(index: number, options?: GetAttachmentOptions): Promise<Buffer>;
   getAttachment(index: number, options?: GetAttachmentOptions): Promise<Buffer | void> {
-    // Guard non-integer indices here: the native layer coerces with ToInt32, so
-    // a NaN/Infinity/fractional index (e.g. from `Number(userInput)`) would
-    // otherwise silently alias onto a valid attachment and return the wrong
-    // embedded file. Integer out-of-range is still handled natively.
-    if (!Number.isInteger(index)) {
-      return Promise.reject(new RangeError(`Attachment index must be an integer, got ${index}`));
+    // Reject indices the native ToInt32 coercion would silently alter (see
+    // isNativeIndex): a NaN/Infinity/fractional index (e.g. from
+    // `Number(userInput)`), or one outside the 32-bit range, must not wrap onto
+    // a valid, different attachment and return the wrong embedded file. In-range
+    // integer out-of-range is still reported natively.
+    if (!isNativeIndex(index)) {
+      return Promise.reject(
+        new RangeError(`Attachment index must be a 32-bit integer, got ${index}`),
+      );
     }
     return withConcurrency(() => this.native.getAttachment(index, options?.output));
   }

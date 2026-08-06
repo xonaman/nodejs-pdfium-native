@@ -224,8 +224,19 @@ export interface QuadPoints {
 }
 
 export interface Annotation {
+  /**
+   * 0-based index of this annotation on the page. Pass it to
+   * {@link NativePage.getAnnotationAttachment} to read a file-attachment
+   * annotation's embedded bytes.
+   */
+  index: number;
   /** Annotation subtype (e.g. 'highlight', 'text', 'link'). */
   type: AnnotationType;
+  /**
+   * For `'fileattachment'` annotations: the embedded file's name
+   * (e.g. 'report.pdf'). Absent for other annotation types.
+   */
+  fileName?: string;
   /** Bounding box in page coordinates, if available. */
   bounds?: PageObjectBounds;
   /** Text contents of the annotation. */
@@ -420,6 +431,7 @@ export interface NativePage {
   getLinks(): Promise<Link[]>;
   search(text: string, options?: SearchOptions): Promise<SearchMatch[]>;
   getAnnotations(): Promise<Annotation[]>;
+  getAnnotationAttachment(index: number, outputPath?: string): Promise<Buffer | undefined>;
   getFormFields(): Promise<FormField[]>;
   close(): void;
 }

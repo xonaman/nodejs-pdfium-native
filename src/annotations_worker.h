@@ -1,5 +1,6 @@
 #pragma once
 
+#include "attachments_worker.h" // shared FPDF_ATTACHMENT read helpers
 #include "napi_helpers.h"
 
 #include <atomic>
@@ -14,9 +15,11 @@
 // ---------------------------------------------------------------------------
 
 struct AnnotationData {
+  int index = 0;
   std::string type;
   double left = 0, bottom = 0, right = 0, top = 0;
   bool hasBounds = false;
+  std::u16string fileName; // set only for 'fileattachment' annotations
   std::u16string contents;
   unsigned int r = 0, g = 0, b = 0, a = 0;
   bool hasColor = false;
@@ -58,6 +61,7 @@ protected:
         continue;
 
       AnnotationData data;
+      data.index = i;
 
       FPDF_ANNOTATION_SUBTYPE subtype = FPDFAnnot_GetSubtype(annot);
       switch (subtype) {
@@ -127,6 +131,14 @@ protected:
       default:
         data.type = "unknown";
         break;
+      }
+
+      // for file-attachment annotations, surface the embedded file name so
+      // callers can decide which annotation to read via getAnnotationAttachment
+      if (subtype == FPDF_ANNOT_FILEATTACHMENT) {
+        FPDF_ATTACHMENT att = FPDFAnnot_GetFileAttachment(annot);
+        if (att)
+          data.fileName = ReadAttachmentName(att);
       }
 
       FS_RECTF rect;
@@ -213,7 +225,9 @@ protected:
     for (uint32_t i = 0; i < annotations_.size(); i++) {
       auto &d = annotations_[i];
       Napi::Object obj = Napi::Object::New(env);
+      obj.Set("index", Napi::Number::New(env, d.index));
       obj.Set("type", Napi::String::New(env, d.type));
+      SetU16IfPresent(obj, "fileName", env, d.fileName);
       if (d.hasBounds)
         obj.Set("bounds",
                 CreateBoundsObject(env, d.left, d.bottom, d.right, d.top));
@@ -271,4 +285,101 @@ private:
   std::shared_ptr<std::atomic<bool>> pageAlive_;
   std::shared_ptr<std::atomic<bool>> docAlive_;
   std::vector<AnnotationData> annotations_;
+};
+
+// ---------------------------------------------------------------------------
+// GetAnnotationAttachmentWorker — read a FileAttachment annotation's bytes
+// ---------------------------------------------------------------------------
+// Complements the document-level embedded-files API (GetAttachmentDataWorker).
+// PDFium keeps "paperclip" file attachments as page-level /FileAttachment
+// annotations whose file lives on the annotation, not in the /EmbeddedFiles
+// name tree. `index` is the annotation index (matching Annotation.index).
+
+class GetAnnotationAttachmentWorker : public SafeAsyncWorker {
+public:
+  GetAnnotationAttachmentWorker(Napi::Env env, FPDF_PAGE page, int index,
+                                std::string outputPath,
+                                std::shared_ptr<std::atomic<bool>> pageAlive,
+                                std::shared_ptr<std::atomic<bool>> docAlive)
+      : SafeAsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
+        page_(page), index_(index), outputPath_(std::move(outputPath)),
+        pageAlive_(std::move(pageAlive)), docAlive_(std::move(docAlive)) {}
+
+  Napi::Promise Promise() { return deferred_.Promise(); }
+
+protected:
+  void Execute() override {
+    std::lock_guard<std::mutex> lock(g_pdfium_mutex);
+    CHECK_ALIVE();
+
+    int count = FPDFPage_GetAnnotCount(page_);
+    if (index_ < 0 || index_ >= count) {
+      SetError("Annotation index out of range");
+      return;
+    }
+
+    FPDF_ANNOTATION annot = FPDFPage_GetAnnot(page_, index_);
+    if (!annot) {
+      SetError("Failed to get annotation");
+      return;
+    }
+    // close the annotation on every exit path (the attachment handle is only
+    // read while the annotation is open, before this guard runs)
+    struct AnnotGuard {
+      FPDF_ANNOTATION a;
+      ~AnnotGuard() { FPDFPage_CloseAnnot(a); }
+    } guard{annot};
+
+    if (FPDFAnnot_GetSubtype(annot) != FPDF_ANNOT_FILEATTACHMENT) {
+      SetError("Annotation at index " + std::to_string(index_) +
+               " is not a file attachment");
+      return;
+    }
+
+    FPDF_ATTACHMENT attachment = FPDFAnnot_GetFileAttachment(annot);
+    if (!attachment) {
+      SetError("File-attachment annotation has no embedded file");
+      return;
+    }
+
+    std::string err;
+    if (!ReadAttachmentFileBytes(attachment, data_, err)) {
+      SetError(err);
+      return;
+    }
+
+    if (!outputPath_.empty()) {
+      if (!WriteAttachmentBytesToFile(outputPath_, data_, err)) {
+        SetError(err);
+        return;
+      }
+      data_.clear();
+    }
+  }
+
+  void OnOK() override {
+    Napi::Env env = Env();
+    if (!outputPath_.empty()) {
+      deferred_.Resolve(env.Undefined());
+      return;
+    }
+    auto *vec = new std::vector<uint8_t>(std::move(data_));
+    auto buffer = Napi::Buffer<uint8_t>::New(
+        env, vec->data(), vec->size(),
+        [](Napi::Env, uint8_t *, std::vector<uint8_t> *v) { delete v; }, vec);
+    deferred_.Resolve(buffer);
+  }
+
+  void OnError(const Napi::Error &err) override {
+    deferred_.Reject(err.Value());
+  }
+
+private:
+  Napi::Promise::Deferred deferred_;
+  FPDF_PAGE page_;
+  int index_;
+  std::string outputPath_;
+  std::shared_ptr<std::atomic<bool>> pageAlive_;
+  std::shared_ptr<std::atomic<bool>> docAlive_;
+  std::vector<uint8_t> data_;
 };

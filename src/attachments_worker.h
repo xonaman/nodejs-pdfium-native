@@ -39,6 +39,74 @@ inline std::u16string ReadAttachmentStringValue(FPDF_ATTACHMENT attachment,
       });
 }
 
+// read an attachment's file name (from the filespec /UF or /F entry)
+inline std::u16string ReadAttachmentName(FPDF_ATTACHMENT attachment) {
+  return ReadU16(
+      [&](auto *, unsigned long) {
+        return FPDFAttachment_GetName(attachment, nullptr, 0);
+      },
+      [&](FPDF_WCHAR *buf, unsigned long len) {
+        return FPDFAttachment_GetName(attachment, buf, len);
+      });
+}
+
+// Reads the full decoded bytes of an attachment via the two-pass
+// FPDFAttachment_GetFile protocol (null buffer → size, then copy). A
+// zero-length embedded file yields an empty vector and success. Returns false
+// and sets `err` on failure. Shared by the document-level and annotation-level
+// attachment readers.
+inline bool ReadAttachmentFileBytes(FPDF_ATTACHMENT attachment,
+                                     std::vector<uint8_t> &out,
+                                     std::string &err) {
+  unsigned long outLen = 0;
+  if (!FPDFAttachment_GetFile(attachment, nullptr, 0, &outLen)) {
+    err = "Failed to read attachment file data";
+    return false;
+  }
+  out.clear();
+  // skip the copy for a zero-length embedded file, where out.data() would be
+  // null and the copy is a no-op anyway
+  if (outLen > 0) {
+    out.resize(outLen);
+    unsigned long written = 0;
+    if (!FPDFAttachment_GetFile(attachment, out.data(), outLen, &written) ||
+        written != outLen) {
+      err = "Failed to read attachment file data";
+      return false;
+    }
+  }
+  return true;
+}
+
+// Writes bytes to `path`, verifying the parent directory exists first (mirrors
+// RenderWorker). Returns false and sets `err` on failure.
+inline bool WriteAttachmentBytesToFile(const std::string &path,
+                                       const std::vector<uint8_t> &data,
+                                       std::string &err) {
+  auto slash = path.rfind('/');
+  if (slash != std::string::npos && slash > 0) {
+    std::string parentDir = path.substr(0, slash);
+    if (access(parentDir.c_str(), F_OK) != 0) {
+      err = "Parent directory does not exist: " + parentDir;
+      return false;
+    }
+  }
+
+  FILE *f = fopen(path.c_str(), "wb");
+  if (!f) {
+    err = "Failed to open output file: " + path;
+    return false;
+  }
+  size_t total = data.size();
+  size_t wrote = total == 0 ? 0 : fwrite(data.data(), 1, total, f);
+  fclose(f);
+  if (wrote != total) {
+    err = "Failed to write output file: " + path;
+    return false;
+  }
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // GetAttachmentsWorker — async attachment metadata listing
 // ---------------------------------------------------------------------------
@@ -169,46 +237,15 @@ protected:
       return;
     }
 
-    // first pass: query the decoded byte length (buffer null → size only)
-    unsigned long outLen = 0;
-    if (!FPDFAttachment_GetFile(attachment, nullptr, 0, &outLen)) {
-      SetError("Failed to read attachment file data");
+    std::string err;
+    if (!ReadAttachmentFileBytes(attachment, data_, err)) {
+      SetError(err);
       return;
     }
 
-    // second pass: copy the bytes (skip for a zero-length embedded file, where
-    // data_.data() would be null and the copy is a no-op anyway)
-    if (outLen > 0) {
-      data_.resize(outLen);
-      unsigned long written = 0;
-      if (!FPDFAttachment_GetFile(attachment, data_.data(), outLen, &written) ||
-          written != outLen) {
-        SetError("Failed to read attachment file data");
-        return;
-      }
-    }
-
     if (!outputPath_.empty()) {
-      // verify parent directory exists (mirrors RenderWorker)
-      auto slash = outputPath_.rfind('/');
-      if (slash != std::string::npos && slash > 0) {
-        std::string parentDir = outputPath_.substr(0, slash);
-        if (access(parentDir.c_str(), F_OK) != 0) {
-          SetError("Parent directory does not exist: " + parentDir);
-          return;
-        }
-      }
-
-      FILE *f = fopen(outputPath_.c_str(), "wb");
-      if (!f) {
-        SetError("Failed to open output file: " + outputPath_);
-        return;
-      }
-      size_t total = data_.size();
-      size_t wrote = total == 0 ? 0 : fwrite(data_.data(), 1, total, f);
-      fclose(f);
-      if (wrote != total) {
-        SetError("Failed to write output file: " + outputPath_);
+      if (!WriteAttachmentBytesToFile(outputPath_, data_, err)) {
+        SetError(err);
         return;
       }
       data_.clear();

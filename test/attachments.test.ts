@@ -128,6 +128,14 @@ describe('PDFiumDocument.getAttachment', () => {
     doc.destroy();
   });
 
+  it('rejects an out-of-32-bit index that ToInt32 would wrap onto a real attachment', async () => {
+    const doc = await loadDocument(fixture('einvoice-zugferd.pdf'));
+    // 2**32 + 1 passes Number.isInteger but ToInt32-wraps to 1 (notes.txt); it
+    // must reject, not silently resolve the wrong embedded file.
+    await expect(doc.getAttachment(2 ** 32 + 1)).rejects.toThrow(RangeError);
+    doc.destroy();
+  });
+
   it('rejects after the document is destroyed', async () => {
     const doc = await loadDocument(fixture('einvoice-zugferd.pdf'));
     doc.destroy();

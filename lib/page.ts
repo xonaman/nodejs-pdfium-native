@@ -1,7 +1,9 @@
 import { withConcurrency } from './concurrency.js';
+import { isNativeIndex } from './validate.js';
 import type {
   Annotation,
   FormField,
+  GetAttachmentOptions,
   ImagePageObject,
   ImageRenderOptions,
   Link,
@@ -100,6 +102,32 @@ export class PDFiumPage {
   /** Returns all annotations on the page. */
   getAnnotations(): Promise<Annotation[]> {
     return withConcurrency(() => this.native.getAnnotations());
+  }
+
+  /**
+   * Reads the embedded file of the file-attachment annotation at `index`
+   * (the annotation's {@link Annotation.index}). Use this for page-level
+   * `'fileattachment'` (paperclip) annotations; for document-level embedded
+   * files (e.g. ZUGFeRD `factur-x.xml`) use `document.getAttachment` instead.
+   *
+   * Rejects if the annotation at `index` is not a file attachment or has no
+   * embedded file.
+   */
+  getAnnotationAttachment(
+    index: number,
+    options: GetAttachmentOptions & { output: string },
+  ): Promise<void>;
+  getAnnotationAttachment(index: number, options?: GetAttachmentOptions): Promise<Buffer>;
+  getAnnotationAttachment(index: number, options?: GetAttachmentOptions): Promise<Buffer | void> {
+    // Reject indices the native ToInt32 coercion would silently alter (see
+    // isNativeIndex): a NaN/fractional or out-of-32-bit index must not wrap
+    // onto a valid, different annotation and return the wrong file.
+    if (!isNativeIndex(index)) {
+      return Promise.reject(
+        new RangeError(`Annotation index must be a 32-bit integer, got ${index}`),
+      );
+    }
+    return withConcurrency(() => this.native.getAnnotationAttachment(index, options?.output));
   }
 
   /** Returns all form fields on the page. */

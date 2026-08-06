@@ -65,7 +65,7 @@ doc.destroy();
 | Bookmarks       | ✅                   | ❌                  | ✅                |
 | Links           | ✅                   | ❌                  | ✅                |
 | Form fields     | ✅                   | ❌                  | ✅                |
-| Attachments     | ✅ Embedded files    | ❌                  | ✅                |
+| Attachments     | ✅ Files + annots    | ❌                  | ✅                |
 | Async I/O       | ✅ libuv workers     | ❌ Sync             | ❌ Main thread    |
 | Platforms       | macOS/Linux/Windows  | Any (WASM)          | Any               |
 
@@ -390,7 +390,9 @@ Returns all annotations on the page. Returns `Promise<Annotation[]>`.
 
 ```typescript
 interface Annotation {
+  index: number; // 0-based annotation index on the page
   type: 'text' | 'link' | 'highlight' | 'underline' | 'strikeout' | /* ... */ 'unknown';
+  fileName?: string; // embedded file name (fileattachment annotations only)
   bounds?: { left; bottom; right; top };
   contents: string;
   color: { r; g; b; a } | null;
@@ -402,6 +404,25 @@ interface Annotation {
   flags: number; // annotation flags bitmask (PDF spec Table 165)
   border?: { horizontalRadius; verticalRadius; width };
   quadPoints?: Array<{ x1; y1; x2; y2; x3; y3; x4; y4 }>;
+}
+```
+
+#### `getAnnotationAttachment(index, options?)`
+
+Reads the embedded file of the `'fileattachment'` (paperclip) annotation at `index` — the annotation's `index` from [`getAnnotations()`](#getannotations). Returns a `Promise<Buffer>`, or writes to a file and returns `Promise<void>` when `output` is given.
+
+This is the **page-level** counterpart to the document-level [`getAttachment(index)`](#getattachmentindex-options): file-attachment annotations live on a page, not in the `/EmbeddedFiles` name tree, so ZUGFeRD / Factur-X e-invoice XML (a document-level embedded file) is read with `document.getAttachment`, not this method.
+
+Rejects if the annotation at `index` is not a file attachment or carries no embedded file.
+
+```typescript
+const annotations = await page.getAnnotations();
+for (const annot of annotations) {
+  if (annot.type === 'fileattachment') {
+    const bytes = await page.getAnnotationAttachment(annot.index); // Buffer of exact embedded bytes
+    // ...or write straight to disk:
+    await page.getAnnotationAttachment(annot.index, { output: annot.fileName ?? 'attachment.bin' });
+  }
 }
 ```
 

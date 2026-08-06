@@ -493,6 +493,63 @@ async function createEInvoicePdf() {
   return doc.save();
 }
 
+// --- PDF with a page-level FileAttachment annotation ---
+// PDFium exposes "paperclip" file attachments as /FileAttachment annotations
+// whose embedded file lives on the annotation itself, NOT in the
+// /EmbeddedFiles name tree (that is the document-level attachment API). A plain
+// Text annotation precedes it so tests can exercise stable annotation indices
+// and the "not a file attachment" error path.
+const ATTACHMENT_REPORT_TXT = 'Quarterly report attachment.\nSecond line.\n';
+
+async function createFileAttachmentAnnotationPdf() {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([612, 792]);
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  page.drawText('Page with a file-attachment annotation', { x: 50, y: 700, size: 14, font });
+
+  const { PDFName, PDFString } = await import('pdf-lib');
+
+  const fileBytes = Buffer.from(ATTACHMENT_REPORT_TXT, 'utf8');
+
+  // embedded file stream (FlateDecode, so extraction proves a lossless decode)
+  const embeddedFile = doc.context.flateStream(fileBytes, {
+    Type: 'EmbeddedFile',
+    Subtype: 'text/plain',
+    Params: { Size: fileBytes.length },
+  });
+  const embeddedFileRef = doc.context.register(embeddedFile);
+
+  const fileSpec = doc.context.obj({
+    Type: 'Filespec',
+    F: PDFString.of('report.txt'),
+    UF: PDFString.of('report.txt'),
+    EF: doc.context.obj({ F: embeddedFileRef }),
+  });
+  const fileSpecRef = doc.context.register(fileSpec);
+
+  // Text annotation first → the FileAttachment annotation lands at index 1
+  const textAnnot = doc.context.obj({
+    Type: 'Annot',
+    Subtype: 'Text',
+    Rect: [50, 600, 70, 620],
+    Contents: PDFString.of('Just a sticky note'),
+  });
+  const textAnnotRef = doc.context.register(textAnnot);
+
+  const fileAnnot = doc.context.obj({
+    Type: 'Annot',
+    Subtype: 'FileAttachment',
+    Rect: [100, 600, 120, 620],
+    Contents: PDFString.of('See attached report'),
+    FS: fileSpecRef,
+    Name: 'Paperclip',
+  });
+  const fileAnnotRef = doc.context.register(fileAnnot);
+
+  page.node.set(PDFName.of('Annots'), doc.context.obj([textAnnotRef, fileAnnotRef]));
+  return doc.save();
+}
+
 // --- PDF with form fields ---
 async function createFormFieldsPdf() {
   const doc = await PDFDocument.create();
@@ -568,6 +625,7 @@ const fixtures = [
   ['border-annotations.pdf', createBorderAnnotationPdf],
   ['form-fields.pdf', createFormFieldsPdf],
   ['einvoice-zugferd.pdf', createEInvoicePdf],
+  ['file-attachment-annotation.pdf', createFileAttachmentAnnotationPdf],
 ];
 
 for (const [name, generator] of fixtures) {
