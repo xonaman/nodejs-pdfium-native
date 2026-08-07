@@ -53,6 +53,8 @@ doc.destroy();
 - 🔗 Read annotations, bookmarks, links, and form fields from existing PDFs
 - 📐 Map extracted text back to page coordinates for redaction or layout analysis
 - ✍️ Inspect digital signatures and document-level JavaScript before trusting a file
+- ♿ Audit tagged-PDF structure and alternate text for accessibility
+- 🗄️ Flatten filled forms for archiving
 
 ### 📊 How it compares
 
@@ -64,6 +66,8 @@ doc.destroy();
 | Search          | ✅ With rects        | ❌                  | ⚠️ Manual         |
 | Split / Merge   | ✅ + reorder / n-up  | ❌                  | ❌                |
 | Signatures      | ✅ Metadata + blob   | ❌                  | ⚠️ Partial        |
+| Struct tree     | ✅                   | ❌                  | ✅                |
+| Flatten         | ✅                   | ❌                  | ❌                |
 | Annotations     | ✅                   | ❌                  | ⚠️ Partial        |
 | Bookmarks       | ✅                   | ❌                  | ✅                |
 | Links           | ✅                   | ❌                  | ✅                |
@@ -84,9 +88,12 @@ doc.destroy();
   - [mergeDocuments](#mergedocumentsinputs-options)
   - [assemblePages](#assemblepagesinput-pages-options)
   - [nUpPages](#nuppagesinput-options)
+  - [addAttachments](#addattachmentsinput-attachments-options)
+  - [flattenDocument](#flattendocumentinput-options)
   - [PDFiumDocument](#pdfiumdocument)
   - [PDFiumPage](#pdfiumpage)
   - [DocumentMetadata](#documentmetadata)
+- [Not supported](#-not-supported)
 - [Concurrency](#️-concurrency)
 - [Memory Management](#-memory-management)
 - [License](#-license)
@@ -240,6 +247,65 @@ await nUpPages('doc.pdf', {
 | `password` | `string` | —                 | Password for the source PDF, if encrypted.             |
 
 The sheet defaults to the size of the first source page, so a 2×2 n-up of A4 pages lands on A4 with each source page scaled to a quarter. Partial sheets are allowed: 4 pages at 3 per sheet produce 2 sheets.
+
+---
+
+### `addAttachments(input, attachments, options?)`
+
+Embeds files into a copy of `input`. Returns `Promise<Buffer>`, or `Promise<void>` when `options.output` is set.
+
+> **This does not produce a conformant PDF/A-3 e-invoice.** PDFium's write API reaches only the file name, the bytes and the `/Params` dates. It cannot set the MIME type (`/Subtype`), the description (`/Desc`), the `/AFRelationship` that marks an attachment as the invoice source, the catalog `/AF` array, an OutputIntent, or the XMP metadata — all of which ZUGFeRD, Factur-X and XRechnung require. Use a PDF/A toolchain to _produce_ e-invoices. _Reading_ them is fully supported by [`getAttachments()`](#getattachments).
+
+```typescript
+import { addAttachments } from 'pdfium-native';
+
+const pdf = await addAttachments('report.pdf', [
+  { name: 'data.csv', data: csvBuffer },
+  { name: 'notes.txt', data: Buffer.from('...'), creationDate: 'D:20250101120000Z' },
+]);
+```
+
+```typescript
+interface AttachmentInput {
+  name: string; // must be non-empty and not already in the document
+  data: Buffer;
+  creationDate?: string; // PDF date string; defaults to now
+  modDate?: string;
+}
+```
+
+| Option     | Type     | Default | Description                                            |
+| ---------- | -------- | ------- | ------------------------------------------------------ |
+| `output`   | `string` | —       | Write to this file path instead of returning a Buffer. |
+| `password` | `string` | —       | Password for the source PDF, if encrypted.             |
+
+Rejects on an empty or duplicate file name.
+
+---
+
+### `flattenDocument(input, options?)`
+
+Merges annotations and form widgets into the page content and removes them. Returns `Promise<Buffer>`, or `Promise<void>` when `options.output` is set.
+
+The result renders identically in every viewer but is no longer interactive — which is the point when archiving, or handing a filled form to a system that ignores annotations.
+
+```typescript
+import { flattenDocument } from 'pdfium-native';
+
+const archived = await flattenDocument('filled-form.pdf');
+
+// print appearances, first page only
+await flattenDocument('doc.pdf', { usage: 'print', pages: [0], output: 'out.pdf' });
+```
+
+| Option     | Type       | Default     | Description                                             |
+| ---------- | ---------- | ----------- | ------------------------------------------------------- |
+| `usage`    | `string`   | `'display'` | `'display'` or `'print'` — which appearance to bake in. |
+| `pages`    | `number[]` | all pages   | Only flatten these page indices.                        |
+| `output`   | `string`   | —           | Write to this file path instead of returning a Buffer.  |
+| `password` | `string`   | —           | Password for the source PDF, if encrypted.              |
+
+This bakes in the appearance streams the document already carries rather than regenerating them. That is correct for any PDF whose widgets have valid `/AP` entries — what every mainstream producer writes. A form flagged `/NeedAppearances`, which asks the viewer to regenerate appearances itself, is the case this cannot help with. Interactive form _filling_ is not supported; see [Not supported](#-not-supported).
 
 ---
 
@@ -474,6 +540,34 @@ Two PDFium behaviours worth knowing:
 - **`isGenerated`** marks characters PDFium synthesized rather than read from the content stream — line breaks between text runs, and spaces inferred from glyph spacing. They carry no real font, so `fontName` is `''`, `fontSize` is `1` and `fontWeight` is absent.
 - **`angle` runs clockwise.** PDFium derives it as `atan2(c, a)` from the text matrix, so text rotated 45° _counterclockwise_ on the page reports ≈ `5.4978` (2π − π/4), not ≈ `0.7854`.
 
+#### `getStructTree()`
+
+Returns the tagged-PDF structure tree for this page — the logical outline (headings, paragraphs, tables, figures) that screen readers follow, and where alternate text lives. Returns `Promise<StructElement[]>`.
+
+The tree is per-page: these are the elements whose content is on this page, not the whole document's tree. Returns an empty array for an untagged page; `metadata.isTagged` says up front whether there is anything to find.
+
+```typescript
+interface StructElement {
+  type: string; // /S, e.g. 'H1', 'P', 'Table', 'Figure'
+  objType?: string; // /Type, normally 'StructElem'
+  title?: string; // /T
+  altText?: string; // /Alt — the accessibility description
+  actualText?: string; // /ActualText
+  id?: string; // /ID
+  lang?: string; // /Lang override for this subtree
+  markedContentId?: number;
+  children?: StructElement[];
+}
+```
+
+```typescript
+// Accessibility check: which figures are missing alternate text?
+const walk = (nodes: StructElement[]): StructElement[] =>
+  nodes.flatMap((n) => [n, ...walk(n.children ?? [])]);
+
+const missing = walk(await page.getStructTree()).filter((n) => n.type === 'Figure' && !n.altText);
+```
+
 #### `render(options?)`
 
 Renders the page to an encoded image. Returns `Promise<Buffer>`, or `Promise<void>` when `output` is specified.
@@ -695,6 +789,18 @@ interface DocumentMetadata {
 ```
 
 ---
+
+## 🚧 Not supported
+
+Deliberate gaps, so you know where the edges are before you hit them:
+
+- **Interactive form filling.** Setting field values programmatically is not offered. PDFium's `FPDF_FORMFILLINFO` is a UI event-loop API — timers, focus tracking, invalidation callbacks — with no meaningful mapping onto a stateless promise-based library, and the shortcut of writing `/V` directly yields PDFs whose rendered appearance contradicts their stored value. Reading fields ([`getFormFields()`](#getformfields)) and [flattening](#flattendocumentinput-options) them are supported.
+- **Producing PDF/A-3 e-invoices.** [`addAttachments()`](#addattachmentsinput-attachments-options) embeds files but cannot set `/Subtype`, `/AFRelationship`, the catalog `/AF` array, an OutputIntent or XMP — all required by ZUGFeRD, Factur-X and XRechnung. Reading such invoices is fully supported.
+- **Signature verification.** [`getSignatures()`](#getsignatures) reports what the signature dictionary declares; PDFium performs no cryptography. Pass the blob from [`getSignatureContents()`](#getsignaturecontentsindex-options) and its `byteRange` to a crypto library to actually validate.
+- **XMP metadata.** Not reachable through PDFium's public API at all.
+- **Executing JavaScript.** The bundled PDFium is built with V8 disabled. [`getJavaScriptActions()`](#getjavascriptactions) returns scripts as inert text.
+
+One PDFium reading quirk worth knowing: an embedded file that decodes to _zero_ bytes comes back from [`getAttachment()`](#getattachmentindex-options) as its raw compressed stream, because PDFium treats "decoded to empty" as a decode failure and falls back to the undecoded bytes.
 
 ## ⚙️ Concurrency
 

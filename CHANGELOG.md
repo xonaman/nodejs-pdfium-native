@@ -16,7 +16,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - `nUpPages(input, options)` imposes `columns × rows` source pages onto each output sheet. The sheet defaults to the size of the first source page, so a 2×2 n-up of A4 lands on A4.
 - `getJavaScriptActions()` on `PDFiumDocument` lists the document-level scripts a viewer runs on open, for inspection and triage of untrusted files. Nothing is executed — the bundled PDFium is built with V8 disabled, so scripts are returned as inert text.
 - `getNamedDestinations()` on `PDFiumDocument` lists the anchors that GoTo actions and external links target by name, resolving each to a page index, fit type and view parameters. Reads both the modern `/Names /Dests` name tree and the legacy `/Dests` catalog dictionary.
-- New exported types: `Signature`, `GetSignatureContentsOptions`, `TextCharacter`, `GetCharactersOptions`, `AssemblePagesOptions`, `NUpPagesOptions`, `JavaScriptAction`, `NamedDestination`, `DestinationView`.
+- `addAttachments(input, attachments, options?)` embeds files into a copy of a document — the library's first write path. **It cannot produce a conformant PDF/A-3 e-invoice:** PDFium's write API reaches only the file name, the bytes and the `/Params` dates, not `/Subtype` (MIME type), `/Desc`, `/AFRelationship`, the catalog `/AF` array, an OutputIntent or XMP. `AttachmentInput` therefore has no `mimeType` or `description` field rather than accepting those values and dropping them silently. Reading e-invoices back remains fully supported.
+- `getStructTree()` on `PDFiumPage` returns the tagged-PDF structure tree — the logical outline (headings, paragraphs, tables, figures) that screen readers follow — with alternate text, actual text, per-element language and marked content IDs. `metadata.isTagged` already reported whether a document had one; now it can be read. Recursion is capped like the bookmark walker so a cyclic document cannot overflow the stack.
+- `flattenDocument(input, options?)` merges annotations and form widgets into the page content and removes them, with per-page selection and the display/print appearance distinction. It bakes in the appearance streams a document already carries rather than regenerating them, which is correct for any PDF whose widgets have valid `/AP` entries; a form flagged `/NeedAppearances` is the uncovered case.
+- New exported types: `Signature`, `GetSignatureContentsOptions`, `TextCharacter`, `GetCharactersOptions`, `AssemblePagesOptions`, `NUpPagesOptions`, `JavaScriptAction`, `NamedDestination`, `DestinationView`, `AttachmentInput`, `AddAttachmentsOptions`, `StructElement`, `FlattenDocumentOptions`.
+
+### Documented
+
+- A README "Not supported" section now states the deliberate gaps up front: interactive form filling (PDFium's `FPDF_FORMFILLINFO` is a UI event-loop API that does not map onto a stateless promise library, and writing `/V` directly yields PDFs whose appearance contradicts their value), producing PDF/A-3 e-invoices, signature verification, XMP metadata and JavaScript execution.
+- `getAttachment()` notes a PDFium reading quirk: an embedded file that decodes to _zero_ bytes comes back as its raw compressed stream, because PDFium treats "decoded to empty" as a decode failure and falls back to the undecoded bytes.
 
 ### Fixed
 
