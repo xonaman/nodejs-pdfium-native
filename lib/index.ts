@@ -244,6 +244,7 @@ export type {
   SearchOptions,
   SearchRect,
   Signature,
+  StructElement,
   SplitDocumentOptions,
   TextCharacter,
   TextPageObject,

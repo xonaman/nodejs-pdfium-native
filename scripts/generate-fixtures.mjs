@@ -493,6 +493,76 @@ async function createEInvoicePdf() {
   return doc.save();
 }
 
+// --- Tagged PDF with a real structure tree ---
+// tagged.pdf only sets /MarkInfo, which is enough for metadata.isTagged but
+// leaves nothing for getStructTree() to read. PDFium needs more than a
+// /StructTreeRoot: CPDF_StructTree::LoadPageTree bails unless the root has a
+// /ParentTree AND the page has /StructParents, then it looks up that key,
+// expects an array of leaf element dicts, and walks /P upwards to rebuild the
+// tree. All of that is assembled by hand below.
+//
+// The page content deliberately carries no BDC/EMC marked-content operators:
+// PDFium reads the structure purely from the dictionaries, so the /K marked
+// content IDs are enough to exercise the API.
+async function createStructTreePdf() {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const page = doc.addPage([300, 400]);
+  page.drawText('Main heading', { x: 50, y: 340, size: 18, font });
+  page.drawText('A paragraph of body text.', { x: 50, y: 300, size: 11, font });
+
+  const { PDFName, PDFString, PDFNumber } = await import('pdf-lib');
+
+  const structTreeRoot = doc.context.obj({ Type: 'StructTreeRoot' });
+  const structTreeRootRef = doc.context.register(structTreeRoot);
+
+  const documentElem = doc.context.obj({
+    Type: 'StructElem',
+    S: 'Document',
+    P: structTreeRootRef,
+    Lang: PDFString.of('en-US'),
+  });
+  const documentRef = doc.context.register(documentElem);
+
+  const child = (props) =>
+    doc.context.register(
+      doc.context.obj({
+        Type: 'StructElem',
+        P: documentRef,
+        Pg: page.ref,
+        ...props,
+      }),
+    );
+
+  const headingRef = child({ S: 'H1', T: PDFString.of('Main heading'), K: 0 });
+  const paragraphRef = child({ S: 'P', K: 1, Lang: PDFString.of('de-DE') });
+  const figureRef = child({
+    S: 'Figure',
+    K: 2,
+    Alt: PDFString.of('A red square'),
+    ActualText: PDFString.of('Figure 1'),
+    ID: PDFString.of('fig1'),
+  });
+
+  documentElem.set(PDFName.of('K'), doc.context.obj([headingRef, paragraphRef, figureRef]));
+  structTreeRoot.set(PDFName.of('K'), doc.context.obj([documentRef]));
+
+  // ParentTree: key 0 -> the leaf elements whose content sits on this page.
+  // PDFium walks each one's /P chain back up to the root.
+  structTreeRoot.set(
+    PDFName.of('ParentTree'),
+    doc.context.obj({
+      Nums: [0, [headingRef, paragraphRef, figureRef]],
+    }),
+  );
+
+  page.node.set(PDFName.of('StructParents'), PDFNumber.of(0));
+  doc.catalog.set(PDFName.of('StructTreeRoot'), structTreeRootRef);
+  doc.catalog.set(PDFName.of('MarkInfo'), doc.context.obj({ Marked: true }));
+
+  return doc.save();
+}
+
 // --- PDF with document-level JavaScript and named destinations ---
 // pdf-lib builds neither, so both name trees are written by hand. The
 // destinations deliberately use both storage forms PDFium understands: the
@@ -807,6 +877,7 @@ const fixtures = [
   ['positioned-text.pdf', createPositionedTextPdf],
   ['four-page.pdf', createFourPagePdf],
   ['navigation.pdf', createNavigationPdf],
+  ['struct-tree.pdf', createStructTreePdf],
 ];
 
 for (const [name, generator] of fixtures) {

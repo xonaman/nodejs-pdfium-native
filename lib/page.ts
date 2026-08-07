@@ -14,6 +14,7 @@ import type {
   PageRenderOptions,
   SearchMatch,
   SearchOptions,
+  StructElement,
   TextCharacter,
 } from './types.js';
 
@@ -91,6 +92,20 @@ export class PDFiumPage {
     }
 
     return withConcurrency(() => this.native.getCharacters(start, count ?? -1));
+  }
+
+  /**
+   * Returns the tagged-PDF structure tree for this page — the logical outline
+   * (headings, paragraphs, tables, figures) that screen readers follow, and
+   * where alternate text lives.
+   *
+   * The tree is per-page: these are the elements whose content is on this page,
+   * not the whole document's tree. Returns an empty array for an untagged page;
+   * `document.metadata.isTagged` says up front whether there is anything to
+   * find.
+   */
+  getStructTree(): Promise<StructElement[]> {
+    return withConcurrency(() => this.native.getStructTree());
   }
 
   /** Renders the page to a file. */

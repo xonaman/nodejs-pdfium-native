@@ -193,6 +193,32 @@ export interface TextCharacter {
   hasUnicodeMapError: boolean;
 }
 
+/**
+ * A node in a tagged PDF's structure tree — the logical document outline
+ * (headings, paragraphs, tables, figures) behind the visual layout, which is
+ * what screen readers follow.
+ */
+export interface StructElement {
+  /** Structure type (/S), e.g. 'H1', 'P', 'Table', 'Figure'. */
+  type: string;
+  /** Object type (/Type), normally 'StructElem'. Absent if not set. */
+  objType?: string;
+  /** Human-readable title (/T). Absent if not set. */
+  title?: string;
+  /** Alternate text (/Alt) — the accessibility description. Absent if not set. */
+  altText?: string;
+  /** Replacement text (/ActualText) for content whose glyphs differ from its meaning. */
+  actualText?: string;
+  /** Element identifier (/ID). Absent if not set. */
+  id?: string;
+  /** Language override (/Lang) for this subtree, e.g. 'de-DE'. Absent if not set. */
+  lang?: string;
+  /** Marked-content ID tying this element to page content. Absent if the element has none. */
+  markedContentId?: number;
+  /** Child elements. Absent when the element has no element children. */
+  children?: StructElement[];
+}
+
 export interface GetCharactersOptions {
   /** First character index to return (default: 0). */
   start?: number;
@@ -584,6 +610,7 @@ export interface NativePage {
   getAnnotations(): Promise<Annotation[]>;
   getAnnotationAttachment(index: number, outputPath?: string): Promise<Buffer | undefined>;
   getFormFields(): Promise<FormField[]>;
+  getStructTree(): Promise<StructElement[]>;
   close(): void;
 }
 

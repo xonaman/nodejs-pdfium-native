@@ -8,6 +8,7 @@
 #include "render_image_worker.h"
 #include "render_worker.h"
 #include "search_worker.h"
+#include "structtree_worker.h"
 #include "text_worker.h"
 
 #include <atomic>
@@ -40,6 +41,7 @@ public:
             InstanceMethod<&PDFiumPage::GetAnnotationAttachment>(
                 "getAnnotationAttachment"),
             InstanceMethod<&PDFiumPage::GetFormFields>("getFormFields"),
+            InstanceMethod<&PDFiumPage::GetStructTree>("getStructTree"),
             InstanceMethod<&PDFiumPage::Close>("close"),
         });
   }
@@ -135,6 +137,21 @@ private:
 
     auto *worker =
         new GetCharactersWorker(env, page_, start, count, alive_, docAlive_);
+    auto promise = worker->Promise();
+    worker->Queue();
+    return promise;
+  }
+
+  /**
+   * Returns the tagged-PDF structure tree for this page (async).
+   */
+  Napi::Value GetStructTree(const Napi::CallbackInfo &info) {
+    Napi::Env env = info.Env();
+    EnsureOpen(env);
+    if (env.IsExceptionPending())
+      return env.Null();
+
+    auto *worker = new GetStructTreeWorker(env, page_, alive_, docAlive_);
     auto promise = worker->Promise();
     worker->Queue();
     return promise;
