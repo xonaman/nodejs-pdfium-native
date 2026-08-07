@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include "assemble_worker.h"
+#include "attachments_write_worker.h"
 #include "fpdf_attachment.h"
 #include "fpdf_catalog.h"
 #include "fpdf_signature.h"
@@ -511,6 +512,106 @@ Napi::Value NUpPages(const Napi::CallbackInfo &info) {
 }
 
 // ---------------------------------------------------------------------------
+// addAttachments — embed files into a copy of a document (async)
+// ---------------------------------------------------------------------------
+
+Napi::Value AddAttachments(const Napi::CallbackInfo &info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 2 || !info[1].IsArray()) {
+    Napi::TypeError::New(env,
+                         "Expected (input, attachments[], options?) arguments")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  Napi::Array jsAttachments = info[1].As<Napi::Array>();
+  if (jsAttachments.Length() == 0) {
+    Napi::TypeError::New(env, "At least one attachment is required")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  std::vector<AttachmentToAdd> attachments;
+  attachments.reserve(jsAttachments.Length());
+
+  for (uint32_t i = 0; i < jsAttachments.Length(); i++) {
+    Napi::Value item = jsAttachments.Get(i);
+    if (!item.IsObject()) {
+      Napi::TypeError::New(env, "Each attachment must be an object")
+          .ThrowAsJavaScriptException();
+      return env.Null();
+    }
+    Napi::Object obj = item.As<Napi::Object>();
+
+    if (!obj.Has("name") || !obj.Get("name").IsString()) {
+      Napi::TypeError::New(env, "Each attachment needs a 'name' string")
+          .ThrowAsJavaScriptException();
+      return env.Null();
+    }
+    if (!obj.Has("data") || !obj.Get("data").IsBuffer()) {
+      Napi::TypeError::New(env, "Each attachment needs a 'data' Buffer")
+          .ThrowAsJavaScriptException();
+      return env.Null();
+    }
+
+    AttachmentToAdd add;
+    add.name = obj.Get("name").As<Napi::String>().Utf16Value();
+
+    auto buffer = obj.Get("data").As<Napi::Buffer<uint8_t>>();
+    add.data.assign(buffer.Data(), buffer.Data() + buffer.Length());
+
+    if (obj.Has("creationDate") && obj.Get("creationDate").IsString()) {
+      add.creationDate =
+          obj.Get("creationDate").As<Napi::String>().Utf16Value();
+    }
+    if (obj.Has("modDate") && obj.Get("modDate").IsString()) {
+      add.modDate = obj.Get("modDate").As<Napi::String>().Utf16Value();
+    }
+
+    attachments.push_back(std::move(add));
+  }
+
+  std::string outputPath;
+  std::string password;
+  if (info.Length() > 2 && info[2].IsObject()) {
+    Napi::Object opts = info[2].As<Napi::Object>();
+    if (opts.Has("output") && opts.Get("output").IsString()) {
+      outputPath = opts.Get("output").As<Napi::String>().Utf8Value();
+    }
+    if (opts.Has("password") && opts.Get("password").IsString()) {
+      password = opts.Get("password").As<Napi::String>().Utf8Value();
+    }
+  }
+
+  Napi::Value arg = info[0];
+  AddAttachmentsWorker *worker = nullptr;
+
+  if (arg.IsBuffer()) {
+    auto buffer = arg.As<Napi::Buffer<uint8_t>>();
+    std::vector<uint8_t> data(buffer.Data(), buffer.Data() + buffer.Length());
+    worker = new AddAttachmentsWorker(env, std::move(data),
+                                      std::move(attachments),
+                                      std::move(outputPath),
+                                      std::move(password));
+  } else if (arg.IsString()) {
+    std::string path = arg.As<Napi::String>().Utf8Value();
+    worker = new AddAttachmentsWorker(env, std::move(path),
+                                      std::move(attachments),
+                                      std::move(outputPath),
+                                      std::move(password));
+  } else {
+    Napi::TypeError::New(env, "Expected a Buffer or string path argument")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  auto promise = worker->Promise();
+  worker->Queue();
+  return promise;
+}
+
+// ---------------------------------------------------------------------------
 // Module init
 // ---------------------------------------------------------------------------
 
@@ -566,6 +667,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("mergeDocuments", Napi::Function::New(env, MergeDocuments));
   exports.Set("assemblePages", Napi::Function::New(env, AssemblePages));
   exports.Set("nUpPages", Napi::Function::New(env, NUpPages));
+  exports.Set("addAttachments", Napi::Function::New(env, AddAttachments));
   exports.Set("prepareShutdown", Napi::Function::New(env, PrepareShutdown));
 
   return exports;

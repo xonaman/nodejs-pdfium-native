@@ -627,6 +627,40 @@ export interface AssemblePagesOptions {
   password?: string;
 }
 
+/**
+ * A file to embed with {@link addAttachments}.
+ *
+ * There is deliberately no `mimeType` or `description` field. The MIME type is
+ * `/Subtype` on the embedded-file stream and the description is `/Desc` on the
+ * filespec dictionary; PDFium's write API reaches neither in the bundled build,
+ * and accepting those values only to drop them silently would be worse than not
+ * offering them. Note this is an asymmetry with reading: `Attachment.mimeType`
+ * is reported when a PDF already carries it.
+ */
+export interface AttachmentInput {
+  /**
+   * File name to store in the /EmbeddedFiles name tree, e.g. 'report.xml'.
+   * Must be non-empty and not already present in the document.
+   */
+  name: string;
+  /** File contents. */
+  data: Buffer;
+  /**
+   * Creation date as a PDF date string, e.g. 'D:20250101120000Z'. Defaults to
+   * the current time, so set it explicitly for reproducible output.
+   */
+  creationDate?: string;
+  /** Modification date as a PDF date string. */
+  modDate?: string;
+}
+
+export interface AddAttachmentsOptions {
+  /** Write to this file path instead of returning a Buffer. */
+  output?: string;
+  /** Password for the source PDF (if encrypted). */
+  password?: string;
+}
+
 export interface NUpPagesOptions {
   /** Number of source pages placed side by side across each output page. */
   columns: number;
@@ -659,4 +693,9 @@ export interface NativeAddon {
     options?: AssemblePagesOptions,
   ): Promise<Buffer | undefined>;
   nUpPages(input: Buffer | string, options: NUpPagesOptions): Promise<Buffer | undefined>;
+  addAttachments(
+    input: Buffer | string,
+    attachments: AttachmentInput[],
+    options?: AddAttachmentsOptions,
+  ): Promise<Buffer | undefined>;
 }

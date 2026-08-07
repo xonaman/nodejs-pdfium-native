@@ -6,7 +6,9 @@ import { PDFiumDocument } from './document.js';
 import { parseNativeError } from './errors.js';
 import { isNativeIndex } from './validate.js';
 import type {
+  AddAttachmentsOptions,
   AssemblePagesOptions,
+  AttachmentInput,
   MergeDocumentInput,
   MergeDocumentsOptions,
   NUpPagesOptions,
@@ -160,6 +162,40 @@ export async function nUpPages(input: PdfInput, options: NUpPagesOptions): Promi
   }
 }
 
+/**
+ * Embeds files into a copy of `input`, returning the new PDF.
+ *
+ * **This does not produce a conformant PDF/A-3 e-invoice.** PDFium's write API
+ * reaches only the file name, the bytes and the `/Params` dates. It cannot set
+ * the MIME type (`/Subtype`), the description (`/Desc`), the
+ * `/AFRelationship` that marks an attachment as the invoice source, the catalog
+ * `/AF` array, an OutputIntent, or the XMP metadata — all of which ZUGFeRD,
+ * Factur-X and XRechnung require. Use this for ordinary attachments; reach for
+ * a PDF/A toolchain to *produce* e-invoices. Reading them back is fully
+ * supported via {@link PDFiumDocument.getAttachments}.
+ */
+export async function addAttachments(
+  input: PdfInput,
+  attachments: AttachmentInput[],
+  options: AddAttachmentsOptions & { output: string },
+): Promise<void>;
+export async function addAttachments(
+  input: PdfInput,
+  attachments: AttachmentInput[],
+  options?: AddAttachmentsOptions,
+): Promise<Buffer>;
+export async function addAttachments(
+  input: PdfInput,
+  attachments: AttachmentInput[],
+  options?: AddAttachmentsOptions,
+): Promise<Buffer | void> {
+  try {
+    return await withConcurrency(() => addon.addAttachments(input, attachments, options));
+  } catch (err) {
+    throw parseNativeError(err);
+  }
+}
+
 export { concurrency } from './concurrency.js';
 export { PDFiumDocument } from './document.js';
 export {
@@ -171,11 +207,13 @@ export {
 } from './errors.js';
 export { PDFiumPage } from './page.js';
 export type {
+  AddAttachmentsOptions,
   Annotation,
   AnnotationBorder,
   AnnotationType,
   AssemblePagesOptions,
   Attachment,
+  AttachmentInput,
   Bookmark,
   DocumentMetadata,
   DestinationView,

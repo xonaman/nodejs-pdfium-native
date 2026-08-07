@@ -64,7 +64,15 @@ export class PDFiumDocument {
 
   /** Writes the attachment at `index` to a file path. */
   getAttachment(index: number, options: GetAttachmentOptions & { output: string }): Promise<void>;
-  /** Reads the raw bytes of the attachment at `index`. */
+  /**
+   * Reads the raw bytes of the attachment at `index`.
+   *
+   * One PDFium quirk to know about: an embedded file that decodes to *zero*
+   * bytes comes back as its raw compressed stream instead of as an empty
+   * buffer. PDFium treats "decoded to empty" as a decode failure and falls back
+   * to the undecoded bytes, so a zero-length FlateDecode attachment yields the
+   * 8-byte zlib envelope rather than nothing.
+   */
   getAttachment(index: number, options?: GetAttachmentOptions): Promise<Buffer>;
   getAttachment(index: number, options?: GetAttachmentOptions): Promise<Buffer | void> {
     // Reject indices the native ToInt32 coercion would silently alter (see
