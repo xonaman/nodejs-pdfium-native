@@ -57,9 +57,17 @@ describe('PDFiumPage.getCharacters', () => {
       expect(a.bounds).toBeDefined();
       // 'A' has no descender, so its box bottom is the baseline
       expect(a.bounds!.bottom).toBeCloseTo(250, 5);
-      expect(a.bounds!.left).toBeCloseTo(50, 5);
       expect(a.bounds!.top).toBeGreaterThan(a.bounds!.bottom);
       expect(a.bounds!.right).toBeGreaterThan(a.bounds!.left);
+
+      // The box hugs the glyph's ink, so its left edge sits at or right of the
+      // pen origin by the font's left side bearing. Deliberately not asserted
+      // as an exact value: positioned-text.pdf uses non-embedded Helvetica, so
+      // PDFium substitutes a different font per platform and the bearing
+      // differs (0 on macOS, ~0.34pt on Linux at 24pt). The origin itself is
+      // font-independent and is checked exactly in the test above.
+      expect(a.bounds!.left).toBeGreaterThanOrEqual(a.x!);
+      expect(a.bounds!.left - a.x!).toBeLessThan(2);
 
       // a 24pt cap-height glyph is taller than the 12pt one
       const c = chars.find((ch) => ch.char === 'C')!;
