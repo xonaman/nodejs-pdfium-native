@@ -9,6 +9,7 @@ import type {
   AddAttachmentsOptions,
   AssemblePagesOptions,
   AttachmentInput,
+  FlattenDocumentOptions,
   MergeDocumentInput,
   MergeDocumentsOptions,
   NUpPagesOptions,
@@ -196,6 +197,44 @@ export async function addAttachments(
   }
 }
 
+/**
+ * Flattens annotations and form widgets into the page content of a copy of
+ * `input`, returning the new PDF.
+ *
+ * The result renders identically in every viewer but is no longer interactive,
+ * which is the point when archiving or handing a filled form to a system that
+ * ignores annotations.
+ *
+ * This bakes in the appearance streams the document already carries rather than
+ * regenerating them, since no form-fill environment is initialised. That is
+ * correct for any PDF whose widgets have valid `/AP` entries — what every
+ * mainstream producer writes. A form flagged `/NeedAppearances`, which asks the
+ * viewer to regenerate appearances itself, is the case this cannot help with.
+ */
+export async function flattenDocument(
+  input: PdfInput,
+  options: FlattenDocumentOptions & { output: string },
+): Promise<void>;
+export async function flattenDocument(
+  input: PdfInput,
+  options?: FlattenDocumentOptions,
+): Promise<Buffer>;
+export async function flattenDocument(
+  input: PdfInput,
+  options?: FlattenDocumentOptions,
+): Promise<Buffer | void> {
+  for (const page of options?.pages ?? []) {
+    if (!isNativeIndex(page)) {
+      throw new RangeError(`Page index must be a 32-bit integer, got ${page}`);
+    }
+  }
+  try {
+    return await withConcurrency(() => addon.flattenDocument(input, options));
+  } catch (err) {
+    throw parseNativeError(err);
+  }
+}
+
 export { concurrency } from './concurrency.js';
 export { PDFiumDocument } from './document.js';
 export {
@@ -220,6 +259,7 @@ export type {
   DocumentPermissions,
   FormField,
   FormFieldOption,
+  FlattenDocumentOptions,
   FormFieldType,
   GetAttachmentOptions,
   GetCharactersOptions,

@@ -688,6 +688,21 @@ export interface AddAttachmentsOptions {
   password?: string;
 }
 
+export interface FlattenDocumentOptions {
+  /**
+   * Which appearance to bake in: `'display'` (default) or `'print'`. They
+   * differ for annotations whose appearance dictionary distinguishes the two —
+   * a watermark marked print-only, for instance.
+   */
+  usage?: 'display' | 'print';
+  /** Only flatten these page indices. Defaults to every page. */
+  pages?: number[];
+  /** Write to this file path instead of returning a Buffer. */
+  output?: string;
+  /** Password for the source PDF (if encrypted). */
+  password?: string;
+}
+
 export interface NUpPagesOptions {
   /** Number of source pages placed side by side across each output page. */
   columns: number;
@@ -724,5 +739,9 @@ export interface NativeAddon {
     input: Buffer | string,
     attachments: AttachmentInput[],
     options?: AddAttachmentsOptions,
+  ): Promise<Buffer | undefined>;
+  flattenDocument(
+    input: Buffer | string,
+    options?: FlattenDocumentOptions,
   ): Promise<Buffer | undefined>;
 }

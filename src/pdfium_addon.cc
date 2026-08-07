@@ -5,6 +5,7 @@
 
 #include "assemble_worker.h"
 #include "attachments_write_worker.h"
+#include "flatten_worker.h"
 #include "fpdf_attachment.h"
 #include "fpdf_catalog.h"
 #include "fpdf_signature.h"
@@ -612,6 +613,76 @@ Napi::Value AddAttachments(const Napi::CallbackInfo &info) {
 }
 
 // ---------------------------------------------------------------------------
+// flattenDocument — bake annotations into page content (async)
+// ---------------------------------------------------------------------------
+
+Napi::Value FlattenDocument(const Napi::CallbackInfo &info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 1) {
+    Napi::TypeError::New(env, "Expected (input, options?) arguments")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  int flag = FLAT_NORMALDISPLAY;
+  std::vector<int> pages;
+  std::string outputPath;
+  std::string password;
+
+  if (info.Length() > 1 && info[1].IsObject()) {
+    Napi::Object opts = info[1].As<Napi::Object>();
+    if (opts.Has("usage") && opts.Get("usage").IsString()) {
+      std::string usage = opts.Get("usage").As<Napi::String>().Utf8Value();
+      if (usage == "print") {
+        flag = FLAT_PRINT;
+      } else if (usage != "display") {
+        Napi::TypeError::New(env, "usage must be 'display' or 'print'")
+            .ThrowAsJavaScriptException();
+        return env.Null();
+      }
+    }
+    if (opts.Has("pages") && opts.Get("pages").IsArray()) {
+      Napi::Array jsPages = opts.Get("pages").As<Napi::Array>();
+      pages.reserve(jsPages.Length());
+      for (uint32_t i = 0; i < jsPages.Length(); i++) {
+        pages.push_back(jsPages.Get(i).As<Napi::Number>().Int32Value());
+      }
+    }
+    if (opts.Has("output") && opts.Get("output").IsString()) {
+      outputPath = opts.Get("output").As<Napi::String>().Utf8Value();
+    }
+    if (opts.Has("password") && opts.Get("password").IsString()) {
+      password = opts.Get("password").As<Napi::String>().Utf8Value();
+    }
+  }
+
+  Napi::Value arg = info[0];
+  FlattenDocumentWorker *worker = nullptr;
+
+  if (arg.IsBuffer()) {
+    auto buffer = arg.As<Napi::Buffer<uint8_t>>();
+    std::vector<uint8_t> data(buffer.Data(), buffer.Data() + buffer.Length());
+    worker = new FlattenDocumentWorker(env, std::move(data), flag,
+                                       std::move(pages), std::move(outputPath),
+                                       std::move(password));
+  } else if (arg.IsString()) {
+    std::string path = arg.As<Napi::String>().Utf8Value();
+    worker = new FlattenDocumentWorker(env, std::move(path), flag,
+                                       std::move(pages), std::move(outputPath),
+                                       std::move(password));
+  } else {
+    Napi::TypeError::New(env, "Expected a Buffer or string path argument")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  auto promise = worker->Promise();
+  worker->Queue();
+  return promise;
+}
+
+// ---------------------------------------------------------------------------
 // Module init
 // ---------------------------------------------------------------------------
 
@@ -668,6 +739,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("assemblePages", Napi::Function::New(env, AssemblePages));
   exports.Set("nUpPages", Napi::Function::New(env, NUpPages));
   exports.Set("addAttachments", Napi::Function::New(env, AddAttachments));
+  exports.Set("flattenDocument", Napi::Function::New(env, FlattenDocument));
   exports.Set("prepareShutdown", Napi::Function::New(env, PrepareShutdown));
 
   return exports;
