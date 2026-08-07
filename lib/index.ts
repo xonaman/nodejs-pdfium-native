@@ -4,9 +4,12 @@ import { fileURLToPath } from 'node:url';
 import { withConcurrency } from './concurrency.js';
 import { PDFiumDocument } from './document.js';
 import { parseNativeError } from './errors.js';
+import { isNativeIndex } from './validate.js';
 import type {
+  AssemblePagesOptions,
   MergeDocumentInput,
   MergeDocumentsOptions,
+  NUpPagesOptions,
   NativeAddon,
   SplitDocumentOptions,
 } from './types.js';
@@ -89,6 +92,74 @@ export async function mergeDocuments(
   }
 }
 
+/**
+ * Builds a new PDF from selected pages of `input`, in the order given.
+ *
+ * Unlike {@link splitDocument}, which only cuts a document into consecutive
+ * runs, the index list here is taken literally: pages may be reordered, left
+ * out, or repeated. `assemblePages(pdf, [3, 0, 0])` yields a three-page
+ * document whose first page is the original page 3 and whose next two are both
+ * the original page 0.
+ */
+export async function assemblePages(
+  input: PdfInput,
+  pages: number[],
+  options: AssemblePagesOptions & { output: string },
+): Promise<void>;
+export async function assemblePages(
+  input: PdfInput,
+  pages: number[],
+  options?: AssemblePagesOptions,
+): Promise<Buffer>;
+export async function assemblePages(
+  input: PdfInput,
+  pages: number[],
+  options?: AssemblePagesOptions,
+): Promise<Buffer | void> {
+  // ToInt32 in the native layer would wrap a fractional or oversized index onto
+  // a different, valid page and silently assemble the wrong document.
+  for (const page of pages) {
+    if (!isNativeIndex(page)) {
+      throw new RangeError(`Page index must be a 32-bit integer, got ${page}`);
+    }
+  }
+  try {
+    return await withConcurrency(() => addon.assemblePages(input, pages, options));
+  } catch (err) {
+    throw parseNativeError(err);
+  }
+}
+
+/**
+ * Imposes `columns × rows` source pages onto each page of a new document —
+ * the classic "n-up" layout for handouts and proof sheets.
+ *
+ * The output sheet defaults to the size of the first source page, so a 2×2
+ * n-up of A4 pages lands on A4 with each source page scaled to a quarter.
+ */
+export async function nUpPages(
+  input: PdfInput,
+  options: NUpPagesOptions & { output: string },
+): Promise<void>;
+export async function nUpPages(input: PdfInput, options: NUpPagesOptions): Promise<Buffer>;
+export async function nUpPages(input: PdfInput, options: NUpPagesOptions): Promise<Buffer | void> {
+  // Validate here rather than natively so callers get a plain RangeError
+  // instead of a PDFiumError wrapping one.
+  for (const [name, value] of [
+    ['columns', options.columns],
+    ['rows', options.rows],
+  ] as const) {
+    if (!Number.isInteger(value) || value < 1) {
+      throw new RangeError(`${name} must be a positive integer, got ${value}`);
+    }
+  }
+  try {
+    return await withConcurrency(() => addon.nUpPages(input, options));
+  } catch (err) {
+    throw parseNativeError(err);
+  }
+}
+
 export { concurrency } from './concurrency.js';
 export { PDFiumDocument } from './document.js';
 export {
@@ -103,6 +174,7 @@ export type {
   Annotation,
   AnnotationBorder,
   AnnotationType,
+  AssemblePagesOptions,
   Attachment,
   Bookmark,
   DocumentMetadata,
@@ -120,6 +192,7 @@ export type {
   LinkActionType,
   MergeDocumentInput,
   MergeDocumentsOptions,
+  NUpPagesOptions,
   OtherPageObject,
   PageObject,
   PageObjectBounds,

@@ -493,6 +493,19 @@ async function createEInvoicePdf() {
   return doc.save();
 }
 
+// --- Four-page PDF whose pages identify themselves ---
+// Each page carries its own number as text, so assembly tests can verify
+// order, selection and duplication by reading the pages back.
+async function createFourPagePdf() {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  for (let i = 1; i <= 4; i++) {
+    const page = doc.addPage([300, 400]);
+    page.drawText(`Page ${i}`, { x: 50, y: 300, size: 24, font });
+  }
+  return doc.save();
+}
+
 // --- PDF exercising positioned text extraction ---
 // Three runs on one page, each drawn at a known baseline origin: two font
 // sizes, a regular/bold font switch, and a 45-degree rotated run. That is
@@ -737,6 +750,7 @@ const fixtures = [
   ['file-attachment-annotation.pdf', createFileAttachmentAnnotationPdf],
   ['signed.pdf', createSignedPdf],
   ['positioned-text.pdf', createPositionedTextPdf],
+  ['four-page.pdf', createFourPagePdf],
 ];
 
 for (const [name, generator] of fixtures) {

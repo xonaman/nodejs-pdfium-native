@@ -3,6 +3,7 @@
 #include <climits>
 #include <cstring>
 
+#include "assemble_worker.h"
 #include "fpdf_attachment.h"
 #include "fpdf_catalog.h"
 #include "fpdf_signature.h"
@@ -377,6 +378,139 @@ Napi::Value MergeDocuments(const Napi::CallbackInfo &info) {
 }
 
 // ---------------------------------------------------------------------------
+// assemblePages — build a PDF from selected source pages, in order (async)
+// ---------------------------------------------------------------------------
+
+Napi::Value AssemblePages(const Napi::CallbackInfo &info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 2 || !info[1].IsArray()) {
+    Napi::TypeError::New(env, "Expected (input, pages[], options?) arguments")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  Napi::Array jsPages = info[1].As<Napi::Array>();
+  if (jsPages.Length() == 0) {
+    Napi::TypeError::New(env, "At least one page index is required")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  std::vector<int> pages;
+  pages.reserve(jsPages.Length());
+  for (uint32_t i = 0; i < jsPages.Length(); i++) {
+    pages.push_back(jsPages.Get(i).As<Napi::Number>().Int32Value());
+  }
+
+  std::string outputPath;
+  std::string password;
+  if (info.Length() > 2 && info[2].IsObject()) {
+    Napi::Object opts = info[2].As<Napi::Object>();
+    if (opts.Has("output") && opts.Get("output").IsString()) {
+      outputPath = opts.Get("output").As<Napi::String>().Utf8Value();
+    }
+    if (opts.Has("password") && opts.Get("password").IsString()) {
+      password = opts.Get("password").As<Napi::String>().Utf8Value();
+    }
+  }
+
+  Napi::Value arg = info[0];
+  AssemblePagesWorker *worker = nullptr;
+
+  if (arg.IsBuffer()) {
+    auto buffer = arg.As<Napi::Buffer<uint8_t>>();
+    std::vector<uint8_t> data(buffer.Data(), buffer.Data() + buffer.Length());
+    worker = new AssemblePagesWorker(env, std::move(data), std::move(pages),
+                                     std::move(outputPath), std::move(password));
+  } else if (arg.IsString()) {
+    std::string path = arg.As<Napi::String>().Utf8Value();
+    worker = new AssemblePagesWorker(env, std::move(path), std::move(pages),
+                                     std::move(outputPath), std::move(password));
+  } else {
+    Napi::TypeError::New(env, "Expected a Buffer or string path argument")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  auto promise = worker->Promise();
+  worker->Queue();
+  return promise;
+}
+
+// ---------------------------------------------------------------------------
+// nUpPages — impose several source pages onto each output page (async)
+// ---------------------------------------------------------------------------
+
+Napi::Value NUpPages(const Napi::CallbackInfo &info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 2 || !info[1].IsObject()) {
+    Napi::TypeError::New(env, "Expected (input, options) arguments")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  Napi::Object opts = info[1].As<Napi::Object>();
+  if (!opts.Has("columns") || !opts.Has("rows")) {
+    Napi::TypeError::New(env, "Expected columns and rows options")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  int columns = opts.Get("columns").As<Napi::Number>().Int32Value();
+  int rows = opts.Get("rows").As<Napi::Number>().Int32Value();
+  if (columns <= 0 || rows <= 0) {
+    Napi::RangeError::New(env, "columns and rows must be positive")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  // 0 means "take it from the first source page", resolved inside the worker
+  float width = 0;
+  float height = 0;
+  if (opts.Has("width") && opts.Get("width").IsNumber()) {
+    width = opts.Get("width").As<Napi::Number>().FloatValue();
+  }
+  if (opts.Has("height") && opts.Get("height").IsNumber()) {
+    height = opts.Get("height").As<Napi::Number>().FloatValue();
+  }
+
+  std::string outputPath;
+  std::string password;
+  if (opts.Has("output") && opts.Get("output").IsString()) {
+    outputPath = opts.Get("output").As<Napi::String>().Utf8Value();
+  }
+  if (opts.Has("password") && opts.Get("password").IsString()) {
+    password = opts.Get("password").As<Napi::String>().Utf8Value();
+  }
+
+  Napi::Value arg = info[0];
+  NUpPagesWorker *worker = nullptr;
+
+  if (arg.IsBuffer()) {
+    auto buffer = arg.As<Napi::Buffer<uint8_t>>();
+    std::vector<uint8_t> data(buffer.Data(), buffer.Data() + buffer.Length());
+    worker = new NUpPagesWorker(env, std::move(data), columns, rows, width,
+                                height, std::move(outputPath),
+                                std::move(password));
+  } else if (arg.IsString()) {
+    std::string path = arg.As<Napi::String>().Utf8Value();
+    worker = new NUpPagesWorker(env, std::move(path), columns, rows, width,
+                                height, std::move(outputPath),
+                                std::move(password));
+  } else {
+    Napi::TypeError::New(env, "Expected a Buffer or string path argument")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  auto promise = worker->Promise();
+  worker->Queue();
+  return promise;
+}
+
+// ---------------------------------------------------------------------------
 // Module init
 // ---------------------------------------------------------------------------
 
@@ -430,6 +564,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("loadDocument", Napi::Function::New(env, LoadDocument));
   exports.Set("splitDocument", Napi::Function::New(env, SplitDocument));
   exports.Set("mergeDocuments", Napi::Function::New(env, MergeDocuments));
+  exports.Set("assemblePages", Napi::Function::New(env, AssemblePages));
+  exports.Set("nUpPages", Napi::Function::New(env, NUpPages));
   exports.Set("prepareShutdown", Napi::Function::New(env, PrepareShutdown));
 
   return exports;

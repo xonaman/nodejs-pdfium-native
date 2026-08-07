@@ -50,11 +50,17 @@ describe('splitDocument', () => {
   });
 
   it('rejects for out-of-range split index', async () => {
-    await expect(splitDocument(fixture('two-page.pdf'), [5])).rejects.toThrow();
+    // the whole message survives: an unrecognized prefix before the colon must
+    // not be mistaken for a PDFium error code and stripped
+    await expect(splitDocument(fixture('two-page.pdf'), [5])).rejects.toThrow(
+      'Split index out of range: 5',
+    );
   });
 
   it('rejects for split index at 0', async () => {
-    await expect(splitDocument(fixture('two-page.pdf'), [0])).rejects.toThrow();
+    await expect(splitDocument(fixture('two-page.pdf'), [0])).rejects.toThrow(
+      'Split index out of range: 0',
+    );
   });
 
   it('rejects for unsorted split indices', async () => {

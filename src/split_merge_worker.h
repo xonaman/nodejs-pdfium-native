@@ -1,103 +1,12 @@
 #pragma once
 
-#include "napi_helpers.h"
+#include "document_io.h"
 
-#include <climits>
-#include <cstdio>
+#include <string>
 #include <vector>
-
-#ifdef _WIN32
-#include <io.h>
-#define F_OK 0
-#define access _access
-#else
-#include <unistd.h>
-#endif
 
 #include "fpdf_edit.h"
 #include "fpdf_ppo.h"
-#include "fpdf_save.h"
-
-// ---------------------------------------------------------------------------
-// FPDF_FILEWRITE adapter — collects saved PDF bytes into a std::vector
-// ---------------------------------------------------------------------------
-
-struct VectorFileWrite : FPDF_FILEWRITE {
-  std::vector<uint8_t> data;
-
-  VectorFileWrite() {
-    version = 1;
-    WriteBlock = [](FPDF_FILEWRITE_ *self, const void *buf,
-                    unsigned long size) -> int {
-      auto *w = static_cast<VectorFileWrite *>(self);
-      auto *bytes = static_cast<const uint8_t *>(buf);
-      w->data.insert(w->data.end(), bytes, bytes + size);
-      return 1;
-    };
-  }
-};
-
-// helper: save a document to buffer or file, returning the buffer data
-static inline bool SaveDocument(FPDF_DOCUMENT doc,
-                                const std::string &outputPath,
-                                std::vector<uint8_t> &outData,
-                                std::string &outError) {
-  VectorFileWrite writer;
-  if (!FPDF_SaveAsCopy(doc, &writer, 0)) {
-    outError = "Failed to save PDF document";
-    return false;
-  }
-
-  if (!outputPath.empty()) {
-    auto slash = outputPath.rfind('/');
-    if (slash != std::string::npos && slash > 0) {
-      std::string parentDir = outputPath.substr(0, slash);
-      if (access(parentDir.c_str(), F_OK) != 0) {
-        outError = "Parent directory does not exist: " + parentDir;
-        return false;
-      }
-    }
-    FILE *f = fopen(outputPath.c_str(), "wb");
-    if (!f) {
-      outError = "Failed to open output file: " + outputPath;
-      return false;
-    }
-    size_t written = fwrite(writer.data.data(), 1, writer.data.size(), f);
-    fclose(f);
-    if (written != writer.data.size()) {
-      outError = "Failed to write output file: " + outputPath;
-      return false;
-    }
-  } else {
-    outData = std::move(writer.data);
-  }
-  return true;
-}
-
-// helper: load a document from buffer or file path
-static inline FPDF_DOCUMENT LoadDoc(const std::vector<uint8_t> &bufferData,
-                                    const std::string &filePath, bool useFile,
-                                    const std::string &password,
-                                    std::string &outError) {
-  const char *pw = password.empty() ? nullptr : password.c_str();
-  FPDF_DOCUMENT doc;
-
-  if (useFile) {
-    doc = FPDF_LoadDocument(filePath.c_str(), pw);
-  } else {
-    if (bufferData.size() > static_cast<size_t>(INT_MAX)) {
-      outError = "FORMAT:Buffer too large";
-      return nullptr;
-    }
-    doc = FPDF_LoadMemDocument(bufferData.data(),
-                               static_cast<int>(bufferData.size()), pw);
-  }
-
-  if (!doc) {
-    outError = GetPdfiumErrorMessage();
-  }
-  return doc;
-}
 
 // ---------------------------------------------------------------------------
 // SplitDocumentWorker — split a PDF into multiple documents at given indices

@@ -576,6 +576,28 @@ export interface MergeDocumentsOptions {
   output?: string;
 }
 
+export interface AssemblePagesOptions {
+  /** Write to this file path instead of returning a Buffer. */
+  output?: string;
+  /** Password for the source PDF (if encrypted). */
+  password?: string;
+}
+
+export interface NUpPagesOptions {
+  /** Number of source pages placed side by side across each output page. */
+  columns: number;
+  /** Number of source pages stacked down each output page. */
+  rows: number;
+  /** Output page width in points. Defaults to the width of the first source page. */
+  width?: number;
+  /** Output page height in points. Defaults to the height of the first source page. */
+  height?: number;
+  /** Write to this file path instead of returning a Buffer. */
+  output?: string;
+  /** Password for the source PDF (if encrypted). */
+  password?: string;
+}
+
 export interface NativeAddon {
   loadDocument(input: Buffer | string, password?: string): Promise<NativeDocument>;
   splitDocument(
@@ -587,4 +609,10 @@ export interface NativeAddon {
     inputs: Array<Buffer | string | { input: Buffer | string; password?: string }>,
     options?: { output?: string },
   ): Promise<Buffer | undefined>;
+  assemblePages(
+    input: Buffer | string,
+    pages: number[],
+    options?: AssemblePagesOptions,
+  ): Promise<Buffer | undefined>;
+  nUpPages(input: Buffer | string, options: NUpPagesOptions): Promise<Buffer | undefined>;
 }
