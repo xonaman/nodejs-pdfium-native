@@ -493,6 +493,97 @@ async function createEInvoicePdf() {
   return doc.save();
 }
 
+// --- PDF with two AcroForm signature fields ---
+// PDFium finds signatures by walking Catalog -> /AcroForm -> /Fields and
+// keeping the entries whose /FT is /Sig, so the fields have to be built by
+// hand — pdf-lib cannot create signature fields.
+//
+// The /Contents blobs and /ByteRange offsets below are FAKE: they are fixed
+// byte patterns, not a real PKCS#7 structure, and the offsets do not describe
+// this file. That is deliberate and sufficient, because PDFium performs no
+// cryptographic verification — it hands back whatever the dictionary says. The
+// fixture proves the extraction path, never signature validity.
+const SIG_CONTENTS_HEX = '308006092a864886f70d010702a0803080020101';
+const CERT_SIG_CONTENTS_HEX = '3082010a0282010100c0ffee';
+
+async function createSignedPdf() {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([612, 792]);
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  page.drawText('Signed document', { x: 50, y: 700, size: 16, font });
+
+  const { PDFName, PDFString, PDFHexString } = await import('pdf-lib');
+
+  // ordinary approval signature — no /Reference, so no DocMDP permission
+  const sigValueRef = doc.context.register(
+    doc.context.obj({
+      Type: 'Sig',
+      Filter: 'Adobe.PPKLite',
+      SubFilter: 'adbe.pkcs7.detached',
+      ByteRange: [0, 840, 1560, 1234],
+      Contents: PDFHexString.of(SIG_CONTENTS_HEX),
+      Reason: PDFString.of('I approve this document'),
+      M: PDFString.of("D:20250101120000+01'00'"),
+      Name: PDFString.of('Test Signer'),
+    }),
+  );
+
+  const sigFieldRef = doc.context.register(
+    doc.context.obj({
+      FT: 'Sig',
+      T: PDFString.of('Signature1'),
+      V: sigValueRef,
+      Type: 'Annot',
+      Subtype: 'Widget',
+      Rect: [50, 600, 250, 650],
+      F: 4,
+      P: page.ref,
+    }),
+  );
+
+  // certification signature — /Reference -> /DocMDP -> /TransformParams /P 2
+  const certValueRef = doc.context.register(
+    doc.context.obj({
+      Type: 'Sig',
+      Filter: 'Adobe.PPKLite',
+      SubFilter: 'ETSI.CAdES.detached',
+      ByteRange: [0, 200, 900, 300],
+      Contents: PDFHexString.of(CERT_SIG_CONTENTS_HEX),
+      M: PDFString.of('D:20250202093000Z'),
+      Reference: [
+        {
+          Type: 'SigRef',
+          TransformMethod: 'DocMDP',
+          TransformParams: { Type: 'TransformParams', P: 2, V: '1.2' },
+        },
+      ],
+    }),
+  );
+
+  const certFieldRef = doc.context.register(
+    doc.context.obj({
+      FT: 'Sig',
+      T: PDFString.of('Certification'),
+      V: certValueRef,
+      Type: 'Annot',
+      Subtype: 'Widget',
+      Rect: [50, 520, 250, 570],
+      F: 4,
+      P: page.ref,
+    }),
+  );
+
+  doc.catalog.set(
+    PDFName.of('AcroForm'),
+    doc.context.obj({ Fields: [sigFieldRef, certFieldRef], SigFlags: 3 }),
+  );
+  page.node.set(PDFName.of('Annots'), doc.context.obj([sigFieldRef, certFieldRef]));
+
+  // pdf-lib would otherwise re-read the AcroForm to regenerate widget
+  // appearances, which these hand-built signature fields do not need
+  return doc.save({ updateFieldAppearances: false });
+}
+
 // --- PDF with a page-level FileAttachment annotation ---
 // PDFium exposes "paperclip" file attachments as /FileAttachment annotations
 // whose embedded file lives on the annotation itself, NOT in the
@@ -626,6 +717,7 @@ const fixtures = [
   ['form-fields.pdf', createFormFieldsPdf],
   ['einvoice-zugferd.pdf', createEInvoicePdf],
   ['file-attachment-annotation.pdf', createFileAttachmentAnnotationPdf],
+  ['signed.pdf', createSignedPdf],
 ];
 
 for (const [name, generator] of fixtures) {

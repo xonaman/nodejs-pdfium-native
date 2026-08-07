@@ -1,10 +1,19 @@
 #pragma once
 
 #include <atomic>
+#include <cstdio>
 #include <mutex>
 #include <napi.h>
 #include <string>
 #include <vector>
+
+#ifdef _WIN32
+#include <io.h>
+#define F_OK 0
+#define access _access
+#else
+#include <unistd.h>
+#endif
 
 #include "fpdf_doc.h"
 #include "fpdfview.h"
@@ -172,6 +181,19 @@ inline std::u16string ReadU16(GetLen getLen, GetData getData) {
                         len / sizeof(unsigned short) - 1);
 }
 
+// read a PDFium 7-bit ASCII buffer into a std::string.
+// Both callbacks return the byte length including the null terminator; the
+// terminator is dropped from the result.
+template <typename GetLen, typename GetData>
+inline std::string ReadAscii(GetLen getLen, GetData getData) {
+  unsigned long len = getLen(static_cast<char *>(nullptr), 0);
+  if (len < 2)
+    return {};
+  std::vector<char> buf(len);
+  getData(buf.data(), len);
+  return std::string(buf.data(), len - 1);
+}
+
 // convert a std::u16string to a Napi::String (empty string if input is empty)
 inline Napi::String ToNapiString(Napi::Env env, const std::u16string &s) {
   if (s.empty())
@@ -191,6 +213,39 @@ inline void SetU16IfPresent(Napi::Object &obj, const char *key, Napi::Env env,
                             const std::u16string &s) {
   if (!s.empty())
     obj.Set(key, ToNapiString(env, s));
+}
+
+// ---------------------------------------------------------------------------
+// File output helper
+// ---------------------------------------------------------------------------
+
+// Writes bytes to `path`, verifying the parent directory exists first (mirrors
+// RenderWorker). Returns false and sets `err` on failure.
+inline bool WriteBytesToFile(const std::string &path,
+                             const std::vector<uint8_t> &data,
+                             std::string &err) {
+  auto slash = path.rfind('/');
+  if (slash != std::string::npos && slash > 0) {
+    std::string parentDir = path.substr(0, slash);
+    if (access(parentDir.c_str(), F_OK) != 0) {
+      err = "Parent directory does not exist: " + parentDir;
+      return false;
+    }
+  }
+
+  FILE *f = fopen(path.c_str(), "wb");
+  if (!f) {
+    err = "Failed to open output file: " + path;
+    return false;
+  }
+  size_t total = data.size();
+  size_t wrote = total == 0 ? 0 : fwrite(data.data(), 1, total, f);
+  fclose(f);
+  if (wrote != total) {
+    err = "Failed to write output file: " + path;
+    return false;
+  }
+  return true;
 }
 
 // ---------------------------------------------------------------------------

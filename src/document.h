@@ -3,6 +3,7 @@
 #include "attachments_worker.h"
 #include "bookmarks_worker.h"
 #include "page.h"
+#include "signatures_worker.h"
 
 #include <algorithm>
 #include <atomic>
@@ -24,6 +25,9 @@ public:
             InstanceMethod<&PDFiumDocument::GetBookmarks>("getBookmarks"),
             InstanceMethod<&PDFiumDocument::GetAttachments>("getAttachments"),
             InstanceMethod<&PDFiumDocument::GetAttachment>("getAttachment"),
+            InstanceMethod<&PDFiumDocument::GetSignatures>("getSignatures"),
+            InstanceMethod<&PDFiumDocument::GetSignatureContents>(
+                "getSignatureContents"),
             InstanceMethod<&PDFiumDocument::Destroy>("destroy"),
         });
   }
@@ -125,6 +129,52 @@ private:
 
     auto *worker = new GetAttachmentDataWorker(env, doc_, index,
                                                std::move(outputPath), docAlive_);
+    auto promise = worker->Promise();
+    worker->Queue();
+    return promise;
+  }
+
+  /**
+   * Returns metadata for every digital signature in the document (async).
+   */
+  Napi::Value GetSignatures(const Napi::CallbackInfo &info) {
+    Napi::Env env = info.Env();
+    EnsureOpen(env);
+    if (env.IsExceptionPending())
+      return env.Null();
+
+    auto *worker = new GetSignaturesWorker(env, doc_, docAlive_);
+    auto promise = worker->Promise();
+    worker->Queue();
+    return promise;
+  }
+
+  /**
+   * Reads the raw /Contents bytes (PKCS#1 / PKCS#7 DER) of the signature at
+   * `index` (async). Resolves to a Buffer, or writes to an optional output
+   * path and resolves to undefined.
+   */
+  Napi::Value GetSignatureContents(const Napi::CallbackInfo &info) {
+    Napi::Env env = info.Env();
+    EnsureOpen(env);
+    if (env.IsExceptionPending())
+      return env.Null();
+
+    if (info.Length() < 1 || !info[0].IsNumber()) {
+      Napi::TypeError::New(env, "Expected signature index")
+          .ThrowAsJavaScriptException();
+      return env.Null();
+    }
+
+    int index = info[0].As<Napi::Number>().Int32Value();
+
+    std::string outputPath;
+    if (info.Length() > 1 && info[1].IsString()) {
+      outputPath = info[1].As<Napi::String>().Utf8Value();
+    }
+
+    auto *worker = new GetSignatureContentsWorker(
+        env, doc_, index, std::move(outputPath), docAlive_);
     auto promise = worker->Promise();
     worker->Queue();
     return promise;

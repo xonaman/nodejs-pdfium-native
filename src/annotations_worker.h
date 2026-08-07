@@ -349,7 +349,7 @@ protected:
     }
 
     if (!outputPath_.empty()) {
-      if (!WriteAttachmentBytesToFile(outputPath_, data_, err)) {
+      if (!WriteBytesToFile(outputPath_, data_, err)) {
         SetError(err);
         return;
       }

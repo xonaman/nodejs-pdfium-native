@@ -413,6 +413,54 @@ export interface GetAttachmentOptions {
   output?: string;
 }
 
+/**
+ * A digital signature as declared by the PDF.
+ *
+ * These values come straight from the signature dictionary — nothing here is
+ * cryptographically verified. A present, well-formed signature says only that
+ * the document *claims* to be signed.
+ */
+export interface Signature {
+  /** 0-based index of the signature in the document's AcroForm field list. */
+  index: number;
+  /**
+   * Encoding of the signature value (/SubFilter), e.g. 'adbe.pkcs7.detached'
+   * or 'ETSI.CAdES.detached'. Empty string if the PDF omits it.
+   */
+  subFilter: string;
+  /** Reason given for signing (/Reason). Absent if not set. */
+  reason?: string;
+  /**
+   * Time of signing (/M) as a PDF date string (e.g. "D:20250101120000+01'00'").
+   * Absent if not set. For PKCS#7 signatures the authoritative time is usually
+   * inside the signature blob instead; use this only as a fallback.
+   */
+  time?: string;
+  /**
+   * Certification level for a DocMDP signature: 1 = no changes allowed,
+   * 2 = form fill-in and signing allowed, 3 = additionally annotations allowed.
+   * Absent for an ordinary (non-certifying) signature.
+   */
+  docMdpPermission?: 1 | 2 | 3;
+  /**
+   * The /ByteRange array covered by the signature digest: a flat list of
+   * (offset, length) pairs, exactly as stored in the PDF. A signature covers
+   * the whole file when the last pair ends at the file size — anything less
+   * means content was appended after signing.
+   */
+  byteRange: number[];
+  /**
+   * Size in bytes of the signature value (/Contents). Read the bytes
+   * themselves with {@link PDFiumDocument.getSignatureContents}.
+   */
+  contentsLength: number;
+}
+
+export interface GetSignatureContentsOptions {
+  /** Write the signature bytes to this file path instead of returning a Buffer. */
+  output?: string;
+}
+
 // native addon bindings (internal)
 export interface NativePage {
   readonly number: number;
@@ -443,6 +491,8 @@ export interface NativeDocument {
   getBookmarks(): Promise<Bookmark[]>;
   getAttachments(): Promise<Attachment[]>;
   getAttachment(index: number, outputPath?: string): Promise<Buffer | undefined>;
+  getSignatures(): Promise<Signature[]>;
+  getSignatureContents(index: number, outputPath?: string): Promise<Buffer | undefined>;
   destroy(): void;
 }
 

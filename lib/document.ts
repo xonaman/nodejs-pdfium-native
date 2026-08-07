@@ -6,7 +6,9 @@ import type {
   Bookmark,
   DocumentMetadata,
   GetAttachmentOptions,
+  GetSignatureContentsOptions,
   NativeDocument,
+  Signature,
 } from './types.js';
 
 /**
@@ -74,5 +76,39 @@ export class PDFiumDocument {
       );
     }
     return withConcurrency(() => this.native.getAttachment(index, options?.output));
+  }
+
+  /**
+   * Returns metadata for every digital signature in the document — encoding,
+   * reason, signing time, certification level and the byte ranges the digest
+   * covers.
+   *
+   * Nothing is cryptographically verified: this reports what the PDF declares
+   * about itself. To actually validate a signature, read its blob with
+   * {@link getSignatureContents} and check it against `byteRange`.
+   */
+  getSignatures(): Promise<Signature[]> {
+    return withConcurrency(() => this.native.getSignatures());
+  }
+
+  /** Writes the signature's /Contents bytes at `index` to a file path. */
+  getSignatureContents(
+    index: number,
+    options: GetSignatureContentsOptions & { output: string },
+  ): Promise<void>;
+  /** Reads the raw /Contents bytes (PKCS#1 / PKCS#7 DER) of the signature at `index`. */
+  getSignatureContents(index: number, options?: GetSignatureContentsOptions): Promise<Buffer>;
+  getSignatureContents(
+    index: number,
+    options?: GetSignatureContentsOptions,
+  ): Promise<Buffer | void> {
+    // Same 32-bit guard as getAttachment: a fractional or out-of-range index
+    // must not ToInt32-wrap onto a different, valid signature.
+    if (!isNativeIndex(index)) {
+      return Promise.reject(
+        new RangeError(`Signature index must be a 32-bit integer, got ${index}`),
+      );
+    }
+    return withConcurrency(() => this.native.getSignatureContents(index, options?.output));
   }
 }

@@ -3,18 +3,9 @@
 #include "napi_helpers.h"
 
 #include <atomic>
-#include <cstdio>
 #include <memory>
 #include <string>
 #include <vector>
-
-#ifdef _WIN32
-#include <io.h>
-#define F_OK 0
-#define access _access
-#else
-#include <unistd.h>
-#endif
 
 #include "fpdf_attachment.h"
 
@@ -74,35 +65,6 @@ inline bool ReadAttachmentFileBytes(FPDF_ATTACHMENT attachment,
       err = "Failed to read attachment file data";
       return false;
     }
-  }
-  return true;
-}
-
-// Writes bytes to `path`, verifying the parent directory exists first (mirrors
-// RenderWorker). Returns false and sets `err` on failure.
-inline bool WriteAttachmentBytesToFile(const std::string &path,
-                                       const std::vector<uint8_t> &data,
-                                       std::string &err) {
-  auto slash = path.rfind('/');
-  if (slash != std::string::npos && slash > 0) {
-    std::string parentDir = path.substr(0, slash);
-    if (access(parentDir.c_str(), F_OK) != 0) {
-      err = "Parent directory does not exist: " + parentDir;
-      return false;
-    }
-  }
-
-  FILE *f = fopen(path.c_str(), "wb");
-  if (!f) {
-    err = "Failed to open output file: " + path;
-    return false;
-  }
-  size_t total = data.size();
-  size_t wrote = total == 0 ? 0 : fwrite(data.data(), 1, total, f);
-  fclose(f);
-  if (wrote != total) {
-    err = "Failed to write output file: " + path;
-    return false;
   }
   return true;
 }
@@ -244,7 +206,7 @@ protected:
     }
 
     if (!outputPath_.empty()) {
-      if (!WriteAttachmentBytesToFile(outputPath_, data_, err)) {
+      if (!WriteBytesToFile(outputPath_, data_, err)) {
         SetError(err);
         return;
       }
