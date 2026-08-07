@@ -493,6 +493,61 @@ async function createEInvoicePdf() {
   return doc.save();
 }
 
+// --- PDF with document-level JavaScript and named destinations ---
+// pdf-lib builds neither, so both name trees are written by hand. The
+// destinations deliberately use both storage forms PDFium understands: the
+// modern /Names /Dests name tree and the legacy /Dests catalog dictionary.
+const OPEN_ACTION_JS = 'app.alert("Opened");';
+const HELPER_JS = 'function helper() { return 42; }';
+
+async function createNavigationPdf() {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const pages = [];
+  for (let i = 1; i <= 3; i++) {
+    const page = doc.addPage([300, 400]);
+    page.drawText(`Section ${i}`, { x: 50, y: 300, size: 20, font });
+    pages.push(page);
+  }
+
+  const { PDFName, PDFString } = await import('pdf-lib');
+
+  // document-level JavaScript, as a /Names /JavaScript name tree
+  const jsAction = (script) =>
+    doc.context.register(doc.context.obj({ S: 'JavaScript', JS: PDFString.of(script) }));
+
+  const javaScriptTree = doc.context.obj({
+    Names: [
+      PDFString.of('OpenAction'),
+      jsAction(OPEN_ACTION_JS),
+      PDFString.of('Helper'),
+      jsAction(HELPER_JS),
+    ],
+  });
+
+  // named destinations in the /Names /Dests name tree. Name-tree entries must
+  // be sorted by name, which is why these read Alpha/Beta rather than
+  // Section1/Section2.
+  const destsTree = doc.context.obj({
+    Names: [
+      PDFString.of('Alpha'),
+      [pages[0].ref, 'XYZ', 50, 700, 2],
+      PDFString.of('Beta'),
+      [pages[1].ref, 'Fit'],
+    ],
+  });
+
+  doc.catalog.set(
+    PDFName.of('Names'),
+    doc.context.obj({ JavaScript: javaScriptTree, Dests: destsTree }),
+  );
+
+  // legacy form: a plain /Dests dictionary on the catalog
+  doc.catalog.set(PDFName.of('Dests'), doc.context.obj({ Legacy: [pages[2].ref, 'FitH', 250] }));
+
+  return doc.save();
+}
+
 // --- Four-page PDF whose pages identify themselves ---
 // Each page carries its own number as text, so assembly tests can verify
 // order, selection and duplication by reading the pages back.
@@ -751,6 +806,7 @@ const fixtures = [
   ['signed.pdf', createSignedPdf],
   ['positioned-text.pdf', createPositionedTextPdf],
   ['four-page.pdf', createFourPagePdf],
+  ['navigation.pdf', createNavigationPdf],
 ];
 
 for (const [name, generator] of fixtures) {

@@ -2,6 +2,8 @@
 
 #include "attachments_worker.h"
 #include "bookmarks_worker.h"
+#include "destinations_worker.h"
+#include "javascript_worker.h"
 #include "page.h"
 #include "signatures_worker.h"
 
@@ -28,6 +30,10 @@ public:
             InstanceMethod<&PDFiumDocument::GetSignatures>("getSignatures"),
             InstanceMethod<&PDFiumDocument::GetSignatureContents>(
                 "getSignatureContents"),
+            InstanceMethod<&PDFiumDocument::GetJavaScriptActions>(
+                "getJavaScriptActions"),
+            InstanceMethod<&PDFiumDocument::GetNamedDestinations>(
+                "getNamedDestinations"),
             InstanceMethod<&PDFiumDocument::Destroy>("destroy"),
         });
   }
@@ -175,6 +181,36 @@ private:
 
     auto *worker = new GetSignatureContentsWorker(
         env, doc_, index, std::move(outputPath), docAlive_);
+    auto promise = worker->Promise();
+    worker->Queue();
+    return promise;
+  }
+
+  /**
+   * Returns every document-level JavaScript action (async).
+   */
+  Napi::Value GetJavaScriptActions(const Napi::CallbackInfo &info) {
+    Napi::Env env = info.Env();
+    EnsureOpen(env);
+    if (env.IsExceptionPending())
+      return env.Null();
+
+    auto *worker = new GetJavaScriptActionsWorker(env, doc_, docAlive_);
+    auto promise = worker->Promise();
+    worker->Queue();
+    return promise;
+  }
+
+  /**
+   * Returns every named destination in the document (async).
+   */
+  Napi::Value GetNamedDestinations(const Napi::CallbackInfo &info) {
+    Napi::Env env = info.Env();
+    EnsureOpen(env);
+    if (env.IsExceptionPending())
+      return env.Null();
+
+    auto *worker = new GetNamedDestinationsWorker(env, doc_, docAlive_);
     auto promise = worker->Promise();
     worker->Queue();
     return promise;

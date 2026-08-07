@@ -521,6 +521,48 @@ export interface GetSignatureContentsOptions {
   output?: string;
 }
 
+/**
+ * A document-level JavaScript action — a script a viewer runs when the
+ * document opens.
+ */
+export interface JavaScriptAction {
+  /** 0-based index in the document's /Names /JavaScript tree. */
+  index: number;
+  /** Entry name in the JavaScript name tree. Empty string if unnamed. */
+  name: string;
+  /** The script source, returned as inert text. Empty string if unreadable. */
+  script: string;
+}
+
+/** How a viewer should frame the target page when following a destination. */
+export type DestinationView =
+  'xyz' | 'fit' | 'fitH' | 'fitV' | 'fitR' | 'fitB' | 'fitBH' | 'fitBV' | 'unknown';
+
+/**
+ * A named destination — an anchor that GoTo actions and external links target
+ * by name instead of by page number.
+ */
+export interface NamedDestination {
+  /** The destination's name, e.g. 'Chapter2'. */
+  name: string;
+  /** Target page index. Absent if the destination cannot be resolved to a page. */
+  pageIndex?: number;
+  /** Fit type declared by the destination. */
+  view: DestinationView;
+  /**
+   * Raw view parameters, up to four numbers whose meaning depends on `view` —
+   * for example `fitR` carries [left, bottom, right, top] and `fitH` a single
+   * top coordinate. Empty for `fit` and `fitB`, which take none.
+   */
+  viewParams: number[];
+  /** Destination X coordinate. Only set for `xyz` destinations that specify one. */
+  destX?: number;
+  /** Destination Y coordinate. Only set for `xyz` destinations that specify one. */
+  destY?: number;
+  /** Destination zoom level. Only set for `xyz` destinations that specify one. */
+  destZoom?: number;
+}
+
 // native addon bindings (internal)
 export interface NativePage {
   readonly number: number;
@@ -554,6 +596,8 @@ export interface NativeDocument {
   getAttachment(index: number, outputPath?: string): Promise<Buffer | undefined>;
   getSignatures(): Promise<Signature[]>;
   getSignatureContents(index: number, outputPath?: string): Promise<Buffer | undefined>;
+  getJavaScriptActions(): Promise<JavaScriptAction[]>;
+  getNamedDestinations(): Promise<NamedDestination[]>;
   destroy(): void;
 }
 

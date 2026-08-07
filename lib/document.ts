@@ -7,6 +7,8 @@ import type {
   DocumentMetadata,
   GetAttachmentOptions,
   GetSignatureContentsOptions,
+  JavaScriptAction,
+  NamedDestination,
   NativeDocument,
   Signature,
 } from './types.js';
@@ -110,5 +112,28 @@ export class PDFiumDocument {
       );
     }
     return withConcurrency(() => this.native.getSignatureContents(index, options?.output));
+  }
+
+  /**
+   * Returns the document-level JavaScript actions — the scripts a viewer runs
+   * when the document opens.
+   *
+   * Useful for inspection and triage: a PDF from an untrusted source that
+   * carries document-open JavaScript is worth checking before rendering.
+   * Nothing here is executed; the scripts come back as inert text.
+   */
+  getJavaScriptActions(): Promise<JavaScriptAction[]> {
+    return withConcurrency(() => this.native.getJavaScriptActions());
+  }
+
+  /**
+   * Returns the document's named destinations — the anchors that GoTo actions
+   * and external links target by name rather than by page number.
+   *
+   * This resolves a name like `Chapter2` to a concrete page index without
+   * walking every link on every page.
+   */
+  getNamedDestinations(): Promise<NamedDestination[]> {
+    return withConcurrency(() => this.native.getNamedDestinations());
   }
 }
