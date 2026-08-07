@@ -140,6 +140,66 @@ export interface OtherPageObject extends BasePageObject {
 
 export type PageObject = TextPageObject | ImagePageObject | OtherPageObject;
 
+/**
+ * A single character on a page, with the geometry `getText()` discards.
+ */
+export interface TextCharacter {
+  /** 0-based index of this character in the page's text. */
+  index: number;
+  /**
+   * The character itself. Empty string when the glyph has no Unicode mapping —
+   * check `hasUnicodeMapError` before trusting it.
+   */
+  char: string;
+  /** Unicode code point, or 0 if the glyph has no mapping. */
+  unicode: number;
+  /**
+   * Tight bounding box in page points, hugging the glyph's ink. Absent if
+   * PDFium cannot determine it.
+   */
+  bounds?: PageObjectBounds;
+  /** X coordinate of the baseline origin in page points. Absent if unavailable. */
+  x?: number;
+  /** Y coordinate of the baseline origin in page points. Absent if unavailable. */
+  y?: number;
+  /** Font size in points (the typographic "em" size). */
+  fontSize: number;
+  /** PostScript name of the font (e.g. 'Helvetica-Bold'). Empty string if unavailable. */
+  fontName: string;
+  /** Raw PDF font descriptor flags bitmask (see PDF spec Table 123). */
+  fontFlags: number;
+  /** Font weight (e.g. 400 = normal, 700 = bold). Absent if unavailable. */
+  fontWeight?: number;
+  /**
+   * Rotation of the character in radians, normalized to `[0, 2π)`. 0 for
+   * upright text.
+   *
+   * Note the direction: PDFium derives this as `atan2(c, a)` from the text
+   * matrix, so it runs *clockwise*. Text rotated 45° counterclockwise on the
+   * page reports ≈ 5.4978 (2π − π/4), not ≈ 0.7854.
+   */
+  angle: number;
+  /**
+   * Whether PDFium synthesized this character rather than reading it from the
+   * content stream — line breaks between text runs, and spaces inferred from
+   * glyph spacing. Synthesized characters carry no real font, so `fontName` is
+   * empty, `fontSize` is 1 and `fontWeight` is absent. Useful when mapping text
+   * offsets back to the original PDF.
+   */
+  isGenerated: boolean;
+  /** Whether this character is a hyphen (relevant when de-hyphenating lines). */
+  isHyphen: boolean;
+  /** Whether the glyph has no reliable Unicode mapping, making `char` unreliable. */
+  hasUnicodeMapError: boolean;
+}
+
+export interface GetCharactersOptions {
+  /** First character index to return (default: 0). */
+  start?: number;
+  /** How many characters to return (default: all remaining). */
+  count?: number;
+}
+
 export interface SearchOptions {
   /** Match case when searching (default: false). */
   caseSensitive?: boolean;
@@ -473,6 +533,7 @@ export interface NativePage {
   readonly cropBox?: PageObjectBounds;
   readonly trimBox?: PageObjectBounds;
   getText(): Promise<string>;
+  getCharacters(start?: number, count?: number): Promise<TextCharacter[]>;
   render(options?: PageRenderOptions): Promise<Buffer | void>;
   getObject(index: number): Promise<PageObject>;
   renderImage(index: number, options?: ImageRenderOptions): Promise<Buffer | void>;

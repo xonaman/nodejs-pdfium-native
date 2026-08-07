@@ -20,9 +20,9 @@
 // GetSignatureContentsWorker hands the blob over untouched.
 
 // read a signature's /SubFilter, /M etc. — these are 7-bit ASCII, not UTF-16LE
-template <typename Fn> inline std::string ReadSignatureAscii(Fn fn) {
-  return ReadAscii([&](char *, unsigned long) { return fn(nullptr, 0); },
-                   [&](char *buf, unsigned long len) { return fn(buf, len); });
+template <typename Fn> inline std::string ReadSignatureString(Fn fn) {
+  return ReadUtf8([&](char *, unsigned long) { return fn(nullptr, 0); },
+                  [&](char *buf, unsigned long len) { return fn(buf, len); });
 }
 
 // Reads the raw /Contents bytes of a signature (a DER-encoded PKCS#1 or PKCS#7
@@ -91,7 +91,7 @@ protected:
       SignatureInfo info;
       info.index = i;
 
-      info.subFilter = ReadSignatureAscii(
+      info.subFilter = ReadSignatureString(
           [&](char *buf, unsigned long len) {
             return FPDFSignatureObj_GetSubFilter(signature, buf, len);
           });
@@ -104,7 +104,7 @@ protected:
             return FPDFSignatureObj_GetReason(signature, buf, len);
           });
 
-      info.time = ReadSignatureAscii([&](char *buf, unsigned long len) {
+      info.time = ReadSignatureString([&](char *buf, unsigned long len) {
         return FPDFSignatureObj_GetTime(signature, buf, len);
       });
 

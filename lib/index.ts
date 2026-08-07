@@ -111,6 +111,7 @@ export type {
   FormFieldOption,
   FormFieldType,
   GetAttachmentOptions,
+  GetCharactersOptions,
   GetSignatureContentsOptions,
   ImageColorspace,
   ImagePageObject,
@@ -130,6 +131,7 @@ export type {
   SearchRect,
   Signature,
   SplitDocumentOptions,
+  TextCharacter,
   TextPageObject,
   TextRenderMode,
 } from './types.js';

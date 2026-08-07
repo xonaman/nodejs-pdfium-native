@@ -181,11 +181,11 @@ inline std::u16string ReadU16(GetLen getLen, GetData getData) {
                         len / sizeof(unsigned short) - 1);
 }
 
-// read a PDFium 7-bit ASCII buffer into a std::string.
-// Both callbacks return the byte length including the null terminator; the
-// terminator is dropped from the result.
+// read a PDFium null-terminated byte buffer (7-bit ASCII or UTF-8) into a
+// std::string. Both callbacks return the byte length including the null
+// terminator; the terminator is dropped from the result.
 template <typename GetLen, typename GetData>
-inline std::string ReadAscii(GetLen getLen, GetData getData) {
+inline std::string ReadUtf8(GetLen getLen, GetData getData) {
   unsigned long len = getLen(static_cast<char *>(nullptr), 0);
   if (len < 2)
     return {};

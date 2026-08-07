@@ -493,6 +493,24 @@ async function createEInvoicePdf() {
   return doc.save();
 }
 
+// --- PDF exercising positioned text extraction ---
+// Three runs on one page, each drawn at a known baseline origin: two font
+// sizes, a regular/bold font switch, and a 45-degree rotated run. That is
+// enough to pin down every geometry field getCharacters() reports without
+// depending on glyph outlines.
+async function createPositionedTextPdf() {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([400, 300]);
+  const regular = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+
+  page.drawText('AB', { x: 50, y: 250, size: 24, font: regular });
+  page.drawText('CD', { x: 50, y: 200, size: 12, font: bold });
+  page.drawText('EF', { x: 200, y: 100, size: 18, font: regular, rotate: degrees(45) });
+
+  return doc.save();
+}
+
 // --- PDF with two AcroForm signature fields ---
 // PDFium finds signatures by walking Catalog -> /AcroForm -> /Fields and
 // keeping the entries whose /FT is /Sig, so the fields have to be built by
@@ -718,6 +736,7 @@ const fixtures = [
   ['einvoice-zugferd.pdf', createEInvoicePdf],
   ['file-attachment-annotation.pdf', createFileAttachmentAnnotationPdf],
   ['signed.pdf', createSignedPdf],
+  ['positioned-text.pdf', createPositionedTextPdf],
 ];
 
 for (const [name, generator] of fixtures) {

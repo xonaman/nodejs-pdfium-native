@@ -4,6 +4,7 @@ import type {
   Annotation,
   FormField,
   GetAttachmentOptions,
+  GetCharactersOptions,
   ImagePageObject,
   ImageRenderOptions,
   Link,
@@ -13,6 +14,7 @@ import type {
   PageRenderOptions,
   SearchMatch,
   SearchOptions,
+  TextCharacter,
 } from './types.js';
 
 /**
@@ -54,6 +56,41 @@ export class PDFiumPage {
   /** Extracts all text from the page. */
   getText(): Promise<string> {
     return withConcurrency(() => this.native.getText());
+  }
+
+  /**
+   * Extracts every character with its bounding box, baseline origin, font and
+   * rotation — the geometry {@link getText} throws away.
+   *
+   * Character indices line up with {@link search} results and with the string
+   * returned by `getText()`, so a match can be mapped straight back to page
+   * coordinates. Dense pages can hold tens of thousands of characters; use
+   * `start` and `count` to page through instead of materialising all of them.
+   */
+  getCharacters(options?: GetCharactersOptions): Promise<TextCharacter[]> {
+    const start = options?.start ?? 0;
+    const count = options?.count;
+
+    // Same 32-bit guard as elsewhere: a fractional or oversized value must not
+    // ToInt32-wrap into a different, silently valid range.
+    if (!isNativeIndex(start)) {
+      return Promise.reject(
+        new RangeError(`Character start must be a 32-bit integer, got ${start}`),
+      );
+    }
+    if (count !== undefined && !isNativeIndex(count)) {
+      return Promise.reject(
+        new RangeError(`Character count must be a 32-bit integer, got ${count}`),
+      );
+    }
+    if (start < 0) {
+      return Promise.reject(new RangeError(`Character start must not be negative, got ${start}`));
+    }
+    if (count !== undefined && count < 0) {
+      return Promise.reject(new RangeError(`Character count must not be negative, got ${count}`));
+    }
+
+    return withConcurrency(() => this.native.getCharacters(start, count ?? -1));
   }
 
   /** Renders the page to a file. */

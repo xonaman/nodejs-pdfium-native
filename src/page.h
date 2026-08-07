@@ -1,6 +1,7 @@
 #pragma once
 
 #include "annotations_worker.h"
+#include "characters_worker.h"
 #include "form_fields_worker.h"
 #include "links_worker.h"
 #include "objects_worker.h"
@@ -29,6 +30,7 @@ public:
         {
             InstanceAccessor<&PDFiumPage::GetNumber>("number"),
             InstanceMethod<&PDFiumPage::GetText>("getText"),
+            InstanceMethod<&PDFiumPage::GetCharacters>("getCharacters"),
             InstanceMethod<&PDFiumPage::Render>("render"),
             InstanceMethod<&PDFiumPage::GetObject>("getObject"),
             InstanceMethod<&PDFiumPage::RenderImage>("renderImage"),
@@ -102,6 +104,37 @@ private:
       return env.Null();
 
     auto *worker = new GetTextWorker(env, page_, alive_, docAlive_);
+    auto promise = worker->Promise();
+    worker->Queue();
+    return promise;
+  }
+
+  /**
+   * Extracts every character with its position, font and rotation (async).
+   * Optional (start, count) arguments restrict the range; a negative count
+   * means "to the end of the page".
+   */
+  Napi::Value GetCharacters(const Napi::CallbackInfo &info) {
+    Napi::Env env = info.Env();
+    EnsureOpen(env);
+    if (env.IsExceptionPending())
+      return env.Null();
+
+    int start = 0;
+    int count = -1;
+    if (info.Length() > 0 && info[0].IsNumber())
+      start = info[0].As<Napi::Number>().Int32Value();
+    if (info.Length() > 1 && info[1].IsNumber())
+      count = info[1].As<Napi::Number>().Int32Value();
+
+    if (start < 0) {
+      Napi::RangeError::New(env, "Character start index must not be negative")
+          .ThrowAsJavaScriptException();
+      return env.Null();
+    }
+
+    auto *worker =
+        new GetCharactersWorker(env, page_, start, count, alive_, docAlive_);
     auto promise = worker->Promise();
     worker->Queue();
     return promise;
