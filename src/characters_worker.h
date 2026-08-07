@@ -21,17 +21,50 @@
 // A dense page can hold tens of thousands of characters, so the range options
 // exist to let callers page through instead of materialising everything.
 
-// Encode a Unicode code point as UTF-16. PDFium stores text page characters in
-// wchar_t, which is 32-bit on POSIX and 16-bit on Windows, so a code point
-// above the BMP arrives whole on one platform and pre-split on the other.
-// Splitting it here makes both behave the same on the JS side.
-inline std::u16string CodePointToU16(unsigned int codePoint) {
-  if (codePoint == 0 || codePoint > 0x10FFFF)
-    return {};
-  if (codePoint <= 0xFFFF)
-    return std::u16string(1, static_cast<char16_t>(codePoint));
+inline bool IsHighSurrogate(unsigned int u) {
+  return u >= 0xD800 && u <= 0xDBFF;
+}
+inline bool IsLowSurrogate(unsigned int u) {
+  return u >= 0xDC00 && u <= 0xDFFF;
+}
 
-  unsigned int v = codePoint - 0x10000;
+// Encode one text-page entry as the JS string for its `char` field.
+//
+// FPDFText_GetUnicode returns a single UTF-16 *code unit* per character index —
+// on POSIX as well as Windows — so a non-BMP character occupies two consecutive
+// indices holding its high and low surrogate. A lone surrogate cannot survive
+// the trip into a JS string (V8 substitutes U+FFFD), so emitting each unit
+// separately would corrupt every astral character.
+//
+// Instead the pair is joined onto the FIRST index and the second yields an
+// empty string. That keeps both invariants callers rely on: indices still line
+// up one-to-one with getText() and with search() results, and concatenating
+// every `char` still reproduces getText() exactly.
+inline std::u16string EncodeCharAt(const std::vector<unsigned int> &units,
+                                   size_t i) {
+  unsigned int u = units[i];
+  if (u == 0 || u > 0x10FFFF)
+    return {};
+
+  if (IsHighSurrogate(u)) {
+    if (i + 1 < units.size() && IsLowSurrogate(units[i + 1])) {
+      std::u16string out;
+      out.push_back(static_cast<char16_t>(u));
+      out.push_back(static_cast<char16_t>(units[i + 1]));
+      return out;
+    }
+    return {}; // unpaired high surrogate — not representable
+  }
+
+  // the low half of a pair already emitted on the previous index
+  if (IsLowSurrogate(u))
+    return {};
+
+  if (u <= 0xFFFF)
+    return std::u16string(1, static_cast<char16_t>(u));
+
+  // a whole code point above the BMP, should PDFium ever report one directly
+  unsigned int v = u - 0x10000;
   std::u16string out;
   out.push_back(static_cast<char16_t>(0xD800 + (v >> 10)));
   out.push_back(static_cast<char16_t>(0xDC00 + (v & 0x3FF)));
@@ -152,12 +185,19 @@ protected:
 
   void OnOK() override {
     Napi::Env env = Env();
+
+    // EncodeCharAt needs the next entry to pair a surrogate with its partner
+    std::vector<unsigned int> units;
+    units.reserve(characters_.size());
+    for (const auto &info : characters_)
+      units.push_back(info.unicode);
+
     Napi::Array arr = Napi::Array::New(env, characters_.size());
     for (uint32_t i = 0; i < characters_.size(); i++) {
       const auto &info = characters_[i];
       Napi::Object obj = Napi::Object::New(env);
       obj.Set("index", Napi::Number::New(env, info.index));
-      SetU16(obj, "char", env, CodePointToU16(info.unicode));
+      SetU16(obj, "char", env, EncodeCharAt(units, i));
       obj.Set("unicode", Napi::Number::New(env, info.unicode));
       if (info.hasBounds) {
         obj.Set("bounds", CreateBoundsObject(env, info.left, info.bottom,
@@ -170,7 +210,10 @@ protected:
       obj.Set("fontSize", Napi::Number::New(env, info.fontSize));
       obj.Set("fontName", Napi::String::New(env, info.fontName));
       obj.Set("fontFlags", Napi::Number::New(env, info.fontFlags));
-      if (info.fontWeight >= 0)
+      // -1 is PDFium's error return and 0 means the font declares no weight;
+      // neither is a usable value, so omit the key rather than report a
+      // meaningless 0 for every non-embedded font.
+      if (info.fontWeight > 0)
         obj.Set("fontWeight", Napi::Number::New(env, info.fontWeight));
       obj.Set("angle", Napi::Number::New(env, info.angle));
       obj.Set("isGenerated", Napi::Boolean::New(env, info.isGenerated));

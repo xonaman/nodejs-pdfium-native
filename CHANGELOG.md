@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-08-07
+
+Fixes for defects found by an adversarial audit of the 0.9.0 release. Every item
+below was reproduced against the shipped build before being fixed, and each is
+now pinned by a regression test.
+
+### Fixed
+
+- `page.getCharacters()` corrupted every non-BMP character. `FPDFText_GetUnicode` returns one UTF-16 _code unit_ per index — on POSIX as well as Windows — so an emoji arrives as two consecutive lone surrogates, and converting each separately made V8 substitute `U+FFFD`. `chars.map((c) => c.char).join('') === getText()`, an invariant the docs promised, was false for any astral character. The pair is now joined onto the first entry with the second yielding an empty continuation, which keeps both that invariant and the index alignment with `getText()` / `search()`. A new `astral-text.pdf` fixture covers it; the previous tests were ASCII-only.
+- `page.getStructTree()` could be made to allocate unboundedly by a ~1.2 KB file. PDFium's structure tree is a DAG and `CPDF_StructElement::UpdateKidIfElement` resolves every kid slot naming a matching dict, so a `/K` array repeating the same child gives that element two live children pointing at one node. Flattening it into a tree doubled the node count per level (a 12-link chain measured 4095 elements, 17 links would be 262,143), all while holding the global PDFium mutex — stalling every other PDFium call in the process, not just the one page. The walk is now bounded by `MAX_STRUCT_NODES` (100,000) in addition to the existing depth cap.
+- `flattenDocument(pdf, { pages: [] })` flattened **every** page instead of none. The native worker could not distinguish an explicitly empty selection from an absent one, so a caller computing `pages` from a filter that matched nothing silently stripped every annotation and form widget in the document. An empty array is now a no-op that returns an unchanged copy; omitting the option still means every page.
+- `nUpPages()` accepted a `columns`/`rows` value outside the signed 32-bit range and let the native `ToInt32` coercion wrap it, so `columns: 2**32 + 2` silently produced a 2-up layout instead of an error. It now uses the same `isNativeIndex` guard as every other index in the library.
+- `TextCharacter.fontWeight` was documented "Absent if unavailable" but was present as a meaningless `0` for every character in a non-embedded font — PDFium returns 0 when the font declares no weight and reserves -1 for errors. The key is now omitted unless the weight is positive.
+- `addAttachments()` truncated an attachment of 4 GiB or more on Windows, where `unsigned long` is 32-bit, writing a short file and reporting success. Payloads above `INT_MAX` are now rejected with an explicit message.
+
 ## [0.9.0] - 2026-08-07
 
 ### Added
@@ -332,7 +347,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - GitHub Actions publish workflow with test gate
 - TypeScript type declarations for JS consumers
 
-[Unreleased]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.6.1...v0.7.0

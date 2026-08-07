@@ -493,6 +493,105 @@ async function createEInvoicePdf() {
   return doc.save();
 }
 
+// --- PDF containing a non-BMP (astral) character ---
+// PDFium reports one UTF-16 code unit per character index, so an emoji arrives
+// as two consecutive lone surrogates. A ToUnicode CMap mapping the glyph for
+// 'A' to U+1F600 produces exactly that without needing an embedded font.
+async function createAstralTextPdf() {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([200, 100]);
+
+  const {
+    PDFName,
+    PDFNumber,
+    PDFString,
+    PDFOperator,
+    PDFOperatorNames: Ops,
+  } = await import('pdf-lib');
+
+  // 'A' -> U+1F600 (surrogate pair D83D DE00), 'B' -> U+00E9
+  const cmap = [
+    '/CIDInit /ProcSet findresource begin',
+    '12 dict begin',
+    'begincmap',
+    '1 begincodespacerange',
+    '<00> <FF>',
+    'endcodespacerange',
+    '2 beginbfchar',
+    '<41> <D83DDE00>',
+    '<42> <00E9>',
+    'endbfchar',
+    'endcmap',
+    'CMapName currentdict /CMap defineresource pop',
+    'end',
+    'end',
+  ].join('\n');
+  const toUnicodeRef = doc.context.register(doc.context.flateStream(Buffer.from(cmap, 'latin1')));
+
+  // The font dictionary is built by hand rather than via embedFont, so the
+  // /ToUnicode entry can be attached to it directly.
+  const fontRef = doc.context.register(
+    doc.context.obj({
+      Type: 'Font',
+      Subtype: 'Type1',
+      BaseFont: 'Helvetica',
+      Encoding: 'WinAnsiEncoding',
+      ToUnicode: toUnicodeRef,
+    }),
+  );
+  page.node.setFontDictionary(PDFName.of('F1'), fontRef);
+
+  page.pushOperators(
+    PDFOperator.of(Ops.BeginText),
+    PDFOperator.of(Ops.SetFontAndSize, [PDFName.of('F1'), PDFNumber.of(24)]),
+    PDFOperator.of(Ops.MoveText, [PDFNumber.of(20), PDFNumber.of(40)]),
+    PDFOperator.of(Ops.ShowText, [PDFString.of('AB')]),
+    PDFOperator.of(Ops.EndText),
+  );
+
+  return doc.save();
+}
+
+// --- Structure tree whose /K arrays repeat the same child ---
+// PDFium resolves every kid slot naming a matching dict, so repeating a
+// reference gives an element two live children pointing at one node. Flattening
+// that DAG into a tree doubles the node count per level. 17 links would expand
+// to 2^18-1 = 262,143 elements from ~1.3 KB, so this fixture actually trips the
+// MAX_STRUCT_NODES budget rather than merely demonstrating the growth.
+async function createStructTreeBombPdf() {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const page = doc.addPage([200, 100]);
+  page.drawText('x', { x: 20, y: 40, size: 12, font });
+
+  const { PDFName, PDFNumber } = await import('pdf-lib');
+
+  const root = doc.context.obj({ Type: 'StructTreeRoot' });
+  const rootRef = doc.context.register(root);
+
+  const leaf = doc.context.obj({ Type: 'StructElem', S: 'P', Pg: page.ref, K: 0 });
+  const leafRef = doc.context.register(leaf);
+
+  let childRef = leafRef;
+  let childObj = leaf;
+  for (let i = 0; i < 17; i++) {
+    const node = doc.context.obj({ Type: 'StructElem', S: 'Div' });
+    const nodeRef = doc.context.register(node);
+    node.set(PDFName.of('K'), doc.context.obj([childRef, childRef]));
+    childObj.set(PDFName.of('P'), nodeRef);
+    childRef = nodeRef;
+    childObj = node;
+  }
+  childObj.set(PDFName.of('P'), rootRef);
+  root.set(PDFName.of('K'), doc.context.obj([childRef]));
+  root.set(PDFName.of('ParentTree'), doc.context.obj({ Nums: [0, [leafRef]] }));
+  page.node.set(PDFName.of('StructParents'), PDFNumber.of(0));
+  doc.catalog.set(PDFName.of('StructTreeRoot'), rootRef);
+  doc.catalog.set(PDFName.of('MarkInfo'), doc.context.obj({ Marked: true }));
+
+  return doc.save();
+}
+
 // --- Tagged PDF with a real structure tree ---
 // tagged.pdf only sets /MarkInfo, which is enough for metadata.isTagged but
 // leaves nothing for getStructTree() to read. PDFium needs more than a
@@ -878,6 +977,8 @@ const fixtures = [
   ['four-page.pdf', createFourPagePdf],
   ['navigation.pdf', createNavigationPdf],
   ['struct-tree.pdf', createStructTreePdf],
+  ['astral-text.pdf', createAstralTextPdf],
+  ['struct-tree-bomb.pdf', createStructTreeBombPdf],
 ];
 
 for (const [name, generator] of fixtures) {

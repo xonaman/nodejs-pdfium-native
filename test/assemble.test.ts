@@ -161,3 +161,20 @@ describe('nUpPages', () => {
     );
   });
 });
+
+describe('nUpPages layout validation', () => {
+  it('rejects a layout outside the 32-bit range instead of wrapping it', async () => {
+    // Regression: Number.isInteger alone let 2**32 + 2 through, and the native
+    // ToInt32 coercion wrapped it to 2 — silently producing a valid but
+    // completely different layout.
+    await expect(
+      nUpPages(fixture('four-page.pdf'), { columns: 2 ** 32 + 2, rows: 1 }),
+    ).rejects.toThrow(RangeError);
+    await expect(
+      nUpPages(fixture('four-page.pdf'), { columns: 1, rows: 2 ** 32 + 3 }),
+    ).rejects.toThrow(RangeError);
+    await expect(nUpPages(fixture('four-page.pdf'), { columns: 1.5, rows: 1 })).rejects.toThrow(
+      RangeError,
+    );
+  });
+});

@@ -147,11 +147,22 @@ export interface TextCharacter {
   /** 0-based index of this character in the page's text. */
   index: number;
   /**
-   * The character itself. Empty string when the glyph has no Unicode mapping —
-   * check `hasUnicodeMapError` before trusting it.
+   * The character itself.
+   *
+   * Empty string when the glyph has no Unicode mapping — check
+   * `hasUnicodeMapError` before trusting it — and also on the *second* entry of
+   * a non-BMP character. PDFium reports one UTF-16 code unit per index, so an
+   * emoji occupies two entries; the whole character is emitted on the first and
+   * the second is an empty continuation. That keeps indices aligned with
+   * `getText()` while `chars.map((c) => c.char).join('')` still reproduces it
+   * exactly.
    */
   char: string;
-  /** Unicode code point, or 0 if the glyph has no mapping. */
+  /**
+   * The raw UTF-16 code unit at this index, or 0 if the glyph has no mapping.
+   * For a non-BMP character this is the high surrogate on the first entry and
+   * the low surrogate on the second, not the combined code point.
+   */
   unicode: number;
   /**
    * Tight bounding box in page points, hugging the glyph's ink. Absent if
@@ -168,7 +179,11 @@ export interface TextCharacter {
   fontName: string;
   /** Raw PDF font descriptor flags bitmask (see PDF spec Table 123). */
   fontFlags: number;
-  /** Font weight (e.g. 400 = normal, 700 = bold). Absent if unavailable. */
+  /**
+   * Font weight (e.g. 400 = normal, 700 = bold). Absent when the font declares
+   * none — which is the case for the non-embedded standard fonts, so do not
+   * treat its absence as an error.
+   */
   fontWeight?: number;
   /**
    * Rotation of the character in radians, normalized to `[0, 2π)`. 0 for
@@ -215,7 +230,14 @@ export interface StructElement {
   lang?: string;
   /** Marked-content ID tying this element to page content. Absent if the element has none. */
   markedContentId?: number;
-  /** Child elements. Absent when the element has no element children. */
+  /**
+   * Child elements. Absent when the element has no element children.
+   *
+   * The walk is capped at 100,000 elements per page. PDFium's structure tree is
+   * a DAG, so a document whose `/K` arrays repeat the same child expands
+   * exponentially when flattened into a tree; the cap bounds that. Real
+   * documents do not come close to it.
+   */
   children?: StructElement[];
 }
 
@@ -695,7 +717,13 @@ export interface FlattenDocumentOptions {
    * a watermark marked print-only, for instance.
    */
   usage?: 'display' | 'print';
-  /** Only flatten these page indices. Defaults to every page. */
+  /**
+   * Only flatten these page indices. Defaults to every page when omitted.
+   *
+   * An explicitly empty array flattens *nothing* and returns an unchanged copy —
+   * so a selection computed by a filter that happens to match no pages is a
+   * no-op rather than a document stripped of every annotation.
+   */
   pages?: number[];
   /** Write to this file path instead of returning a Buffer. */
   output?: string;

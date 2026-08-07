@@ -110,3 +110,21 @@ describe('flattenDocument', () => {
     );
   });
 });
+
+describe('flattenDocument page selection semantics', () => {
+  it('treats an explicitly empty pages array as "flatten nothing"', async () => {
+    // Regression: an empty array used to be indistinguishable from "not given"
+    // in the native worker, so it flattened EVERY page. A caller computing the
+    // selection from a filter that matches nothing would silently strip every
+    // annotation in the document.
+    const src = readFileSync(fixture('annotations.pdf'));
+    expect(await annotationCount(src)).toBe(2);
+
+    const untouched = await flattenDocument(src, { pages: [] });
+    expect(await annotationCount(untouched)).toBe(2);
+
+    // omitting the option entirely still means "every page"
+    const all = await flattenDocument(src);
+    expect(await annotationCount(all)).toBe(0);
+  });
+});

@@ -24,6 +24,18 @@
 // maximum structure tree recursion depth, mirroring MAX_BOOKMARK_DEPTH
 constexpr int MAX_STRUCT_DEPTH = 64;
 
+// Maximum number of elements returned for one page.
+//
+// A depth cap alone does not bound the work: PDFium's structure tree is a DAG,
+// and CPDF_StructElement::UpdateKidIfElement resolves EVERY kid slot whose dict
+// matches, so a /K array naming the same child twice gives that element two
+// live children pointing at one node. Flattening that into a tree doubles the
+// node count per level — a 1.8 KB file with a 12-link chain expands to 4095
+// elements, and each extra link doubles it again. Since the whole traversal
+// runs holding g_pdfium_mutex, an unbounded walk would stall every other
+// PDFium call in the process, not just this one.
+constexpr int MAX_STRUCT_NODES = 100000;
+
 // read one of the struct element's UTF-16LE string properties
 template <typename Fn> inline std::u16string ReadStructString(Fn fn) {
   return ReadU16([&](auto *, unsigned long) { return fn(nullptr, 0); },
@@ -66,6 +78,8 @@ protected:
 
     int count = FPDF_StructTree_CountChildren(tree);
     for (int i = 0; i < count; i++) {
+      if (nodeCount_ >= MAX_STRUCT_NODES)
+        break;
       FPDF_STRUCTELEMENT element = FPDF_StructTree_GetChildAtIndex(tree, i);
       if (!element)
         continue;
@@ -87,6 +101,7 @@ protected:
 private:
   StructElementInfo ReadElement(FPDF_STRUCTELEMENT element, int depth) {
     StructElementInfo info;
+    nodeCount_++;
 
     info.type = ReadStructString([&](FPDF_WCHAR *buf, unsigned long len) {
       return FPDF_StructElement_GetType(element, buf, len);
@@ -113,12 +128,16 @@ private:
     info.markedContentId = FPDF_StructElement_GetMarkedContentID(element);
 
     // A malformed or hostile PDF can nest structure elements arbitrarily deep,
-    // or cycle; stop descending rather than overflow the stack.
-    if (depth >= MAX_STRUCT_DEPTH)
+    // or cycle; stop descending rather than overflow the stack. The node budget
+    // additionally bounds *breadth*, which the depth cap does not — see
+    // MAX_STRUCT_NODES.
+    if (depth >= MAX_STRUCT_DEPTH || nodeCount_ >= MAX_STRUCT_NODES)
       return info;
 
     int childCount = FPDF_StructElement_CountChildren(element);
     for (int i = 0; i < childCount; i++) {
+      if (nodeCount_ >= MAX_STRUCT_NODES)
+        break;
       // returns null for children that are content references rather than
       // elements, which is expected and simply skipped
       FPDF_STRUCTELEMENT child =
@@ -161,4 +180,5 @@ private:
   std::shared_ptr<std::atomic<bool>> pageAlive_;
   std::shared_ptr<std::atomic<bool>> docAlive_;
   std::vector<StructElementInfo> roots_;
+  int nodeCount_ = 0;
 };

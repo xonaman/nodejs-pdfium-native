@@ -197,3 +197,71 @@ describe('PDFiumPage.getCharacters ranges', () => {
     doc.destroy();
   });
 });
+
+describe('PDFiumPage.getCharacters with non-BMP text', () => {
+  // astral-text.pdf maps the glyph for 'A' to U+1F600 and 'B' to U+00E9 via a
+  // ToUnicode CMap, so the page reads "😀é" — three UTF-16 code units.
+  const withAstral = async (fn: (page: PDFiumPage) => Promise<void>) => {
+    const doc = await loadDocument(fixture('astral-text.pdf'));
+    const page = await doc.getPage(0);
+    try {
+      await fn(page);
+    } finally {
+      page.close();
+      doc.destroy();
+    }
+  };
+
+  it('keeps one entry per UTF-16 code unit, matching getText()', async () => {
+    await withAstral(async (page) => {
+      const text = await page.getText();
+      const chars = await page.getCharacters();
+
+      expect(text).toBe('\u{1F600}é');
+      // the emoji occupies two indices, so 3 units and 3 entries
+      expect(text.length).toBe(3);
+      expect(chars).toHaveLength(3);
+    });
+  });
+
+  it('emits the whole astral character on its first entry, not a replacement char', async () => {
+    await withAstral(async (page) => {
+      const chars = await page.getCharacters();
+
+      // Regression: each lone surrogate used to be converted separately and
+      // V8 replaced it with U+FFFD, corrupting every non-BMP character.
+      expect(chars[0].char).toBe('\u{1F600}');
+      expect(chars[0].char).not.toContain('�');
+      // the second half is an empty continuation entry
+      expect(chars[1].char).toBe('');
+      expect(chars[2].char).toBe('é');
+    });
+  });
+
+  it('still reproduces getText() exactly when the chars are concatenated', async () => {
+    await withAstral(async (page) => {
+      const text = await page.getText();
+      const chars = await page.getCharacters();
+      expect(chars.map((c) => c.char).join('')).toBe(text);
+    });
+  });
+
+  it('exposes the raw surrogate code units in unicode', async () => {
+    await withAstral(async (page) => {
+      const chars = await page.getCharacters();
+      // high surrogate, low surrogate, then a plain BMP code point
+      expect(chars.map((c) => c.unicode)).toEqual([0xd83d, 0xde00, 0x00e9]);
+    });
+  });
+
+  it('omits fontWeight when the font declares none', async () => {
+    await withPositionedText(async (page) => {
+      const chars = await page.getCharacters();
+      // Regression: PDFium returns 0 (not -1) for the non-embedded standard
+      // fonts, so a meaningless fontWeight: 0 used to be present on every entry.
+      for (const c of chars.filter((ch) => 'ABCD'.includes(ch.char))) {
+        expect(c.fontWeight).toBeUndefined();
+      }
+    });
+  });
+});

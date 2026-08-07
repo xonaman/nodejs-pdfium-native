@@ -26,21 +26,21 @@ class FlattenDocumentWorker : public SafeAsyncWorker {
 public:
   // buffer variant
   FlattenDocumentWorker(Napi::Env env, std::vector<uint8_t> data, int flag,
-                        std::vector<int> pages, std::string outputPath,
-                        std::string password)
+                        std::vector<int> pages, bool hasPageSelection,
+                        std::string outputPath, std::string password)
       : SafeAsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
         bufferData_(std::move(data)), flag_(flag), pages_(std::move(pages)),
-        outputPath_(std::move(outputPath)), password_(std::move(password)),
-        useFile_(false) {}
+        hasPageSelection_(hasPageSelection), outputPath_(std::move(outputPath)),
+        password_(std::move(password)), useFile_(false) {}
 
   // file path variant
   FlattenDocumentWorker(Napi::Env env, std::string filePath, int flag,
-                        std::vector<int> pages, std::string outputPath,
-                        std::string password)
+                        std::vector<int> pages, bool hasPageSelection,
+                        std::string outputPath, std::string password)
       : SafeAsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)),
         filePath_(std::move(filePath)), flag_(flag), pages_(std::move(pages)),
-        outputPath_(std::move(outputPath)), password_(std::move(password)),
-        useFile_(true) {}
+        hasPageSelection_(hasPageSelection), outputPath_(std::move(outputPath)),
+        password_(std::move(password)), useFile_(true) {}
 
   Napi::Promise Promise() { return deferred_.Promise(); }
 
@@ -58,8 +58,12 @@ protected:
 
     int pageCount = FPDF_GetPageCount(doc);
 
+    // An explicitly empty selection means "flatten nothing", NOT "flatten
+    // everything" — a caller that computes `pages` from a filter and legitimately
+    // gets [] must end up with an unchanged copy, not a document stripped of
+    // every annotation.
     std::vector<int> targets = pages_;
-    if (targets.empty()) {
+    if (!hasPageSelection_) {
       targets.reserve(pageCount);
       for (int i = 0; i < pageCount; i++)
         targets.push_back(i);
@@ -126,6 +130,7 @@ private:
   std::string filePath_;
   int flag_ = FLAT_NORMALDISPLAY;
   std::vector<int> pages_;
+  bool hasPageSelection_ = false;
   std::string outputPath_;
   std::string password_;
   bool useFile_ = false;

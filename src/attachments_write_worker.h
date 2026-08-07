@@ -2,6 +2,7 @@
 
 #include "document_io.h"
 
+#include <climits>
 #include <string>
 #include <vector>
 
@@ -79,6 +80,15 @@ protected:
         // embedded-files name tree, which is the likely cause here.
         SetError("Failed to add attachment (empty or duplicate name): " +
                  Utf8Of(item.name));
+        return;
+      }
+
+      // unsigned long is 32-bit on Windows, so an oversized payload would be
+      // truncated mod 2^32 and silently written short. PDFium rejects anything
+      // above INT_MAX anyway; refuse it here with a message that says why.
+      if (item.data.size() > static_cast<size_t>(INT_MAX)) {
+        FPDF_CloseDocument(doc);
+        SetError("Attachment is too large (max 2 GiB): " + Utf8Of(item.name));
         return;
       }
 

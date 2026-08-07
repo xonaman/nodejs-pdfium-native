@@ -105,3 +105,31 @@ describe('PDFiumPage.getStructTree', () => {
     doc.destroy();
   });
 });
+
+describe('PDFiumPage.getStructTree resource bounds', () => {
+  it('bounds a structure tree that expands exponentially', async () => {
+    // struct-tree-bomb.pdf is ~1.2 KB but its /K arrays each name the same
+    // child twice. PDFium resolves every matching kid slot, so flattening the
+    // DAG into a tree doubles the node count per level — 17 links would be
+    // 262,143 elements. Without a node budget this allocates unboundedly while
+    // holding the global PDFium mutex, stalling every other call in the process.
+    const doc = await loadDocument(fixture('struct-tree-bomb.pdf'));
+    const page = await doc.getPage(0);
+
+    const started = Date.now();
+    const tree = await page.getStructTree();
+    const elapsed = Date.now() - started;
+
+    const total = (nodes: StructElement[]): number =>
+      nodes.reduce((sum, n) => sum + 1 + total(n.children ?? []), 0);
+    const count = total(tree);
+
+    // capped rather than 2^18 - 1, and fast enough to prove it did not expand
+    expect(count).toBeGreaterThan(0);
+    expect(count).toBeLessThanOrEqual(100_000);
+    expect(elapsed).toBeLessThan(10_000);
+
+    page.close();
+    doc.destroy();
+  });
+});

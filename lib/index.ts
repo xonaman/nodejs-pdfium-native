@@ -152,8 +152,11 @@ export async function nUpPages(input: PdfInput, options: NUpPagesOptions): Promi
     ['columns', options.columns],
     ['rows', options.rows],
   ] as const) {
-    if (!Number.isInteger(value) || value < 1) {
-      throw new RangeError(`${name} must be a positive integer, got ${value}`);
+    // isNativeIndex, not just Number.isInteger: the native layer coerces with
+    // ToInt32, so 2**32 + 2 would wrap to 2 and silently produce a different,
+    // perfectly valid layout instead of an error.
+    if (!isNativeIndex(value) || value < 1) {
+      throw new RangeError(`${name} must be a positive 32-bit integer, got ${value}`);
     }
   }
   try {

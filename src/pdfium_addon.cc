@@ -627,6 +627,7 @@ Napi::Value FlattenDocument(const Napi::CallbackInfo &info) {
 
   int flag = FLAT_NORMALDISPLAY;
   std::vector<int> pages;
+  bool hasPageSelection = false;
   std::string outputPath;
   std::string password;
 
@@ -643,6 +644,7 @@ Napi::Value FlattenDocument(const Napi::CallbackInfo &info) {
       }
     }
     if (opts.Has("pages") && opts.Get("pages").IsArray()) {
+      hasPageSelection = true;
       Napi::Array jsPages = opts.Get("pages").As<Napi::Array>();
       pages.reserve(jsPages.Length());
       for (uint32_t i = 0; i < jsPages.Length(); i++) {
@@ -664,12 +666,14 @@ Napi::Value FlattenDocument(const Napi::CallbackInfo &info) {
     auto buffer = arg.As<Napi::Buffer<uint8_t>>();
     std::vector<uint8_t> data(buffer.Data(), buffer.Data() + buffer.Length());
     worker = new FlattenDocumentWorker(env, std::move(data), flag,
-                                       std::move(pages), std::move(outputPath),
+                                       std::move(pages), hasPageSelection,
+                                       std::move(outputPath),
                                        std::move(password));
   } else if (arg.IsString()) {
     std::string path = arg.As<Napi::String>().Utf8Value();
     worker = new FlattenDocumentWorker(env, std::move(path), flag,
-                                       std::move(pages), std::move(outputPath),
+                                       std::move(pages), hasPageSelection,
+                                       std::move(outputPath),
                                        std::move(password));
   } else {
     Napi::TypeError::New(env, "Expected a Buffer or string path argument")
