@@ -34,7 +34,12 @@ constexpr int MAX_STRUCT_DEPTH = 64;
 // elements, and each extra link doubles it again. Since the whole traversal
 // runs holding g_pdfium_mutex, an unbounded walk would stall every other
 // PDFium call in the process, not just this one.
-constexpr int MAX_STRUCT_NODES = 100000;
+//
+// The value is deliberately low enough that reaching it stays cheap: a single
+// page's structure tree covers only that page's own content, so a real document
+// runs to hundreds of elements, not thousands. 20,000 leaves ample headroom
+// while keeping the worst case fast even on an emulated runner.
+constexpr int MAX_STRUCT_NODES = 20000;
 
 // read one of the struct element's UTF-16LE string properties
 template <typename Fn> inline std::u16string ReadStructString(Fn fn) {

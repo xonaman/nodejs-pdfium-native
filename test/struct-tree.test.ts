@@ -115,19 +115,18 @@ describe('PDFiumPage.getStructTree resource bounds', () => {
     // holding the global PDFium mutex, stalling every other call in the process.
     const doc = await loadDocument(fixture('struct-tree-bomb.pdf'));
     const page = await doc.getPage(0);
-
-    const started = Date.now();
     const tree = await page.getStructTree();
-    const elapsed = Date.now() - started;
 
     const total = (nodes: StructElement[]): number =>
       nodes.reduce((sum, n) => sum + 1 + total(n.children ?? []), 0);
-    const count = total(tree);
 
-    // capped rather than 2^18 - 1, and fast enough to prove it did not expand
+    // Capped, rather than the 2^18 - 1 the file describes. Deliberately no
+    // wall-clock assertion: the emulated ppc64/armv7 release runners are an
+    // order of magnitude slower than native, so timing would be a flake. The
+    // node count is the deterministic, machine-independent invariant.
+    const count = total(tree);
     expect(count).toBeGreaterThan(0);
-    expect(count).toBeLessThanOrEqual(100_000);
-    expect(elapsed).toBeLessThan(10_000);
+    expect(count).toBeLessThanOrEqual(20_000);
 
     page.close();
     doc.destroy();
