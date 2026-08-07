@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-07
+
+### Added
+
+- Digital signature inspection on `PDFiumDocument`: `getSignatures()` lists every signature with its encoding (`/SubFilter`), reason, signing time, DocMDP certification level and the `/ByteRange` its digest covers, and `getSignatureContents(index, options?)` returns the raw PKCS#1 / PKCS#7 blob as a `Buffer` (or writes it to `options.output`). Wraps PDFium's `fpdf_signature.h`. Nothing is cryptographically verified — PDFium performs no verification, so these report what the signature dictionary declares; pass the blob and `byteRange` to a crypto library to actually validate. This closes the gap where `metadata.signatureCount` could detect signatures but nothing could inspect them.
+- Positioned text extraction on `PDFiumPage`: `getCharacters(options?)` returns every character with its tight bounding box, baseline origin, font name/size/weight/flags and rotation. Character indices line up with `getText()` and `search()` results, so a match maps straight back to page coordinates. `options.start` / `options.count` page through dense pages instead of materialising tens of thousands of objects. Two PDFium behaviours are surfaced rather than hidden: `isGenerated` marks the line breaks and spaces PDFium synthesizes between text runs (they carry no real font), and `angle` runs clockwise — text rotated 45° counterclockwise reports `2π − π/4`, not `π/4`.
+- `assemblePages(input, pages, options?)` builds a new PDF from selected source pages, in the order given. Unlike `splitDocument`, which only cuts a document into consecutive runs, the index list is taken literally: pages may be reordered, omitted, or repeated.
+- `nUpPages(input, options)` imposes `columns × rows` source pages onto each output sheet. The sheet defaults to the size of the first source page, so a 2×2 n-up of A4 lands on A4.
+- `getJavaScriptActions()` on `PDFiumDocument` lists the document-level scripts a viewer runs on open, for inspection and triage of untrusted files. Nothing is executed — the bundled PDFium is built with V8 disabled, so scripts are returned as inert text.
+- `getNamedDestinations()` on `PDFiumDocument` lists the anchors that GoTo actions and external links target by name, resolving each to a page index, fit type and view parameters. Reads both the modern `/Names /Dests` name tree and the legacy `/Dests` catalog dictionary.
+- New exported types: `Signature`, `GetSignatureContentsOptions`, `TextCharacter`, `GetCharactersOptions`, `AssemblePagesOptions`, `NUpPagesOptions`, `JavaScriptAction`, `NamedDestination`, `DestinationView`.
+
+### Fixed
+
+- Native error messages containing a colon are no longer truncated. `parseNativeError` treated everything before the first colon as an error code, so `splitDocument`'s `"Split index out of range: 5"` reached the caller as code `"Split index out of range"` with message `" 5"` — the useful half discarded. Only the fixed set of PDFium error codes (`FILE`, `FORMAT`, `PASSWORD`, `SECURITY`, `PAGE`, `UNKNOWN`) is stripped now; every other message is passed through whole. This affected `splitDocument`, `mergeDocuments` and any file-output path since 0.5.0.
+
+### Changed
+
+- Internal: `VectorFileWrite`, `SaveDocument` and `LoadDoc` moved from `split_merge_worker.h` into a shared `document_io.h`, and the byte-writing helper moved from `attachments_worker.h` into `napi_helpers.h` as `WriteBytesToFile`. No public API change.
+
 ## [0.8.0] - 2026-08-06
 
 ### Added
@@ -304,7 +324,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - GitHub Actions publish workflow with test gate
 - TypeScript type declarations for JS consumers
 
-[Unreleased]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.6.0...v0.6.1

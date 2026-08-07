@@ -49,8 +49,10 @@ doc.destroy();
 - 🖼️ Generate thumbnails and previews for uploaded PDFs
 - 📄 Extract searchable text from documents at scale
 - ⚙️ Build server-side PDF processing pipelines
-- ✂️ Split PDFs by page range or merge multiple PDFs into one
+- ✂️ Split, merge, reorder, or impose PDFs — including n-up handout layouts
 - 🔗 Read annotations, bookmarks, links, and form fields from existing PDFs
+- 📐 Map extracted text back to page coordinates for redaction or layout analysis
+- ✍️ Inspect digital signatures and document-level JavaScript before trusting a file
 
 ### 📊 How it compares
 
@@ -58,9 +60,10 @@ doc.destroy();
 | --------------- | -------------------- | ------------------- | ----------------- |
 | Engine          | PDFium (C++ addon)   | PDFium (WASM)       | pdf.js (JS)       |
 | Rendering       | ✅ JPEG/PNG built-in | ⚠️ Raw bitmap (BYO) | ⚠️ Canvas/browser |
-| Text extraction | ✅                   | ❌                  | ✅                |
+| Text extraction | ✅ Plain + per-char  | ❌                  | ✅                |
 | Search          | ✅ With rects        | ❌                  | ⚠️ Manual         |
-| Split / Merge   | ✅                   | ❌                  | ❌                |
+| Split / Merge   | ✅ + reorder / n-up  | ❌                  | ❌                |
+| Signatures      | ✅ Metadata + blob   | ❌                  | ⚠️ Partial        |
 | Annotations     | ✅                   | ❌                  | ⚠️ Partial        |
 | Bookmarks       | ✅                   | ❌                  | ✅                |
 | Links           | ✅                   | ❌                  | ✅                |
@@ -79,6 +82,8 @@ doc.destroy();
   - [loadDocument](#loaddocumentinput-password)
   - [splitDocument](#splitdocumentinput-splitat-options)
   - [mergeDocuments](#mergedocumentsinputs-options)
+  - [assemblePages](#assemblepagesinput-pages-options)
+  - [nUpPages](#nuppagesinput-options)
   - [PDFiumDocument](#pdfiumdocument)
   - [PDFiumPage](#pdfiumpage)
   - [DocumentMetadata](#documentmetadata)
@@ -177,6 +182,67 @@ await mergeDocuments(['a.pdf', 'b.pdf'], { output: 'merged.pdf' });
 
 ---
 
+### `assemblePages(input, pages, options?)`
+
+Builds a new PDF from selected pages of `input`, in the order given. Returns `Promise<Buffer>`, or `Promise<void>` when `options.output` is set.
+
+Where [`splitDocument`](#splitdocumentinput-splitat-options) only cuts a document into consecutive runs, the index list here is taken literally: pages may be reordered, left out, or repeated.
+
+```typescript
+import { assemblePages } from 'pdfium-native';
+
+// reverse a four-page document
+const reversed = await assemblePages('doc.pdf', [3, 2, 1, 0]);
+
+// pull out one page
+await assemblePages('doc.pdf', [2], { output: 'page3.pdf' });
+
+// repeat a page — e.g. a cover sheet before each section
+const buf = await assemblePages('doc.pdf', [0, 1, 0, 2]);
+```
+
+| Option     | Type     | Default | Description                                            |
+| ---------- | -------- | ------- | ------------------------------------------------------ |
+| `output`   | `string` | —       | Write to this file path instead of returning a Buffer. |
+| `password` | `string` | —       | Password for the source PDF, if encrypted.             |
+
+Rejects if any index is outside `0 … pageCount - 1`, naming the offending index.
+
+---
+
+### `nUpPages(input, options)`
+
+Imposes `columns × rows` source pages onto each page of a new document — the classic "n-up" layout for handouts and proof sheets. Returns `Promise<Buffer>`, or `Promise<void>` when `options.output` is set.
+
+```typescript
+import { nUpPages } from 'pdfium-native';
+
+// four source pages per sheet, sheet size taken from the first source page
+const handout = await nUpPages('slides.pdf', { columns: 2, rows: 2 });
+
+// two-up on landscape A4
+await nUpPages('doc.pdf', {
+  columns: 2,
+  rows: 1,
+  width: 842,
+  height: 595,
+  output: 'twoup.pdf',
+});
+```
+
+| Option     | Type     | Default           | Description                                            |
+| ---------- | -------- | ----------------- | ------------------------------------------------------ |
+| `columns`  | `number` | — (required)      | Source pages placed side by side across each sheet.    |
+| `rows`     | `number` | — (required)      | Source pages stacked down each sheet.                  |
+| `width`    | `number` | first source page | Output sheet width in points.                          |
+| `height`   | `number` | first source page | Output sheet height in points.                         |
+| `output`   | `string` | —                 | Write to this file path instead of returning a Buffer. |
+| `password` | `string` | —                 | Password for the source PDF, if encrypted.             |
+
+The sheet defaults to the size of the first source page, so a 2×2 n-up of A4 pages lands on A4 with each source page scaled to a quarter. Partial sheets are allowed: 4 pages at 3 per sheet produce 2 sheets.
+
+---
+
 ### PDFiumDocument
 
 | Property    | Type               | Description                             |
@@ -257,6 +323,90 @@ doc.destroy();
 
 Rejects if `index` is out of range (`0 … attachmentCount - 1`). `metadata.attachmentCount` gives the count without loading anything.
 
+#### `getSignatures()`
+
+Lists every digital signature in the document. Returns `Promise<Signature[]>`.
+
+Nothing here is cryptographically verified — PDFium does not do that. These values are what the signature dictionary _declares_, so a well-formed entry proves only that the document claims to be signed.
+
+```typescript
+interface Signature {
+  index: number; // 0-based index in the AcroForm field list
+  subFilter: string; // encoding, e.g. 'adbe.pkcs7.detached', 'ETSI.CAdES.detached'
+  reason?: string; // /Reason, if given
+  time?: string; // /M as a PDF date string, e.g. "D:20250101120000+01'00'"
+  docMdpPermission?: 1 | 2 | 3; // certification level; absent for ordinary signatures
+  byteRange: number[]; // flat (offset, length) pairs covered by the digest
+  contentsLength: number; // size of /Contents in bytes
+}
+```
+
+```typescript
+const doc = await loadDocument('contract.pdf');
+
+for (const sig of await doc.getSignatures()) {
+  // A signature covers the whole file only if its last range ends at the file
+  // size. Anything less means content was appended after signing.
+  const end = sig.byteRange.at(-2)! + sig.byteRange.at(-1)!;
+  console.log(sig.subFilter, sig.reason, 'covers', end, 'bytes');
+}
+```
+
+`metadata.signatureCount` gives the count without listing anything.
+
+#### `getSignatureContents(index, options?)`
+
+Reads the raw `/Contents` bytes of the signature at `index` — a DER-encoded PKCS#1 or PKCS#7 binary. Returns `Promise<Buffer>`, or `Promise<void>` when `options.output` is a file path.
+
+Pass this, together with the `byteRange` from `getSignatures()`, to a crypto library to actually validate the signature.
+
+#### `getJavaScriptActions()`
+
+Lists the document-level scripts a viewer runs when the document opens. Returns `Promise<JavaScriptAction[]>`.
+
+Nothing is executed — the bundled PDFium is built with V8 disabled, so scripts come back as inert text. This is for inspection and triage.
+
+```typescript
+interface JavaScriptAction {
+  index: number;
+  name: string; // entry name in the /Names /JavaScript tree
+  script: string; // the script source, as text
+}
+```
+
+```typescript
+const doc = await loadDocument('untrusted.pdf');
+const scripts = await doc.getJavaScriptActions();
+if (scripts.length > 0) {
+  console.warn(`${scripts.length} document-open script(s) — review before rendering`);
+}
+```
+
+#### `getNamedDestinations()`
+
+Lists the document's named destinations — the anchors that GoTo actions and external links target by name rather than by page number. Returns `Promise<NamedDestination[]>`.
+
+Both storage forms are read: the modern `/Names /Dests` name tree and the legacy `/Dests` catalog dictionary.
+
+```typescript
+interface NamedDestination {
+  name: string; // e.g. 'Chapter2'
+  pageIndex?: number; // resolved target page
+  view: 'xyz' | 'fit' | 'fitH' | 'fitV' | 'fitR' | 'fitB' | 'fitBH' | 'fitBV' | 'unknown';
+  viewParams: number[]; // up to 4 numbers; meaning depends on `view`
+  destX?: number; // 'xyz' destinations only
+  destY?: number;
+  destZoom?: number;
+}
+```
+
+```typescript
+// Resolve "document.pdf#Chapter2" to a page index without walking every link.
+const doc = await loadDocument('document.pdf');
+const target = (await doc.getNamedDestinations()).find((d) => d.name === 'Chapter2');
+console.log(target?.pageIndex);
+```
+
 #### `destroy()`
 
 Closes the document and frees all native resources. Must be called when done.
@@ -280,6 +430,49 @@ Closes the document and frees all native resources. Must be called when done.
 #### `getText()`
 
 Extracts all text from the page. Returns `Promise<string>`.
+
+#### `getCharacters(options?)`
+
+Extracts every character with the geometry `getText()` throws away — bounding box, baseline origin, font and rotation. Returns `Promise<TextCharacter[]>`.
+
+Character indices line up with `getText()` and with [`search()`](#searchtext-options) results, so a match maps straight back to page coordinates.
+
+```typescript
+interface TextCharacter {
+  index: number; // 0-based, matches the offset in getText()
+  char: string; // '' when the glyph has no Unicode mapping
+  unicode: number;
+  bounds?: PageObjectBounds; // tight box around the glyph's ink
+  x?: number; // baseline origin
+  y?: number;
+  fontSize: number;
+  fontName: string; // e.g. 'Helvetica-Bold'
+  fontFlags: number;
+  fontWeight?: number;
+  angle: number; // radians, [0, 2π) — see the note below
+  isGenerated: boolean;
+  isHyphen: boolean;
+  hasUnicodeMapError: boolean;
+}
+```
+
+```typescript
+const page = await doc.getPage(0);
+
+// Where on the page is the total?
+const chars = await page.getCharacters();
+const [match] = await page.search('Total');
+const box = chars[match.charIndex].bounds;
+
+// Dense pages can hold tens of thousands of characters — page through instead
+// of materialising all of them at once.
+const firstThousand = await page.getCharacters({ start: 0, count: 1000 });
+```
+
+Two PDFium behaviours worth knowing:
+
+- **`isGenerated`** marks characters PDFium synthesized rather than read from the content stream — line breaks between text runs, and spaces inferred from glyph spacing. They carry no real font, so `fontName` is `''`, `fontSize` is `1` and `fontWeight` is absent.
+- **`angle` runs clockwise.** PDFium derives it as `atan2(c, a)` from the text matrix, so text rotated 45° _counterclockwise_ on the page reports ≈ `5.4978` (2π − π/4), not ≈ `0.7854`.
 
 #### `render(options?)`
 
