@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-22
+
 ### Added
 
 - `Attachment.afRelationship` on `getAttachments()`: the `/AFRelationship` entry (PDF 2.0, ISO 32000-2:2020 Table 43) states an embedded file's _role_ rather than its type — a ZUGFeRD / Factur-X e-invoice marks the machine-readable invoice XML `Alternative` and a human-readable companion `Supplement`, alongside `Source`, `Data` and `Unspecified`. Without it a reader had to guess which attachment was the invoice from its file name. The key is absent when the PDF omits the entry; PDFium reports "absent" and "present but not a name" identically, so neither is surfaced as `''`. `addAttachments()` still cannot set it — the entry sits on the file-specification dictionary, which the write path does not build — so attachments written by this library report no value.
@@ -355,7 +357,8 @@ now pinned by a regression test.
 - GitHub Actions publish workflow with test gate
 - TypeScript type declarations for JS consumers
 
-[Unreleased]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.7.0...v0.8.0
