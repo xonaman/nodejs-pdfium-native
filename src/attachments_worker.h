@@ -80,6 +80,7 @@ struct AttachmentInfo {
   int index = 0;
   std::u16string name;
   std::u16string mimeType;
+  std::u16string afRelationship;
   std::u16string creationDate;
   std::u16string modDate;
 };
@@ -130,6 +131,20 @@ protected:
             return FPDFAttachment_GetSubtype(attachment, buf, len);
           });
 
+      // /AFRelationship (PDF 2.0) states an embedded file's role -- a
+      // ZUGFeRD/Factur-X invoice XML is marked "Alternative", a human-readable
+      // companion "Supplement". PDFium returns an empty string both when the
+      // entry is absent and when it is not a name object, so the two are
+      // indistinguishable here and the key is omitted rather than reported
+      // as "".
+      info.afRelationship = ReadU16(
+          [&](auto *, unsigned long) {
+            return FPDFAttachment_GetAFRelationship(attachment, nullptr, 0);
+          },
+          [&](FPDF_WCHAR *buf, unsigned long len) {
+            return FPDFAttachment_GetAFRelationship(attachment, buf, len);
+          });
+
       info.creationDate = ReadAttachmentStringValue(attachment, "CreationDate");
       info.modDate = ReadAttachmentStringValue(attachment, "ModDate");
 
@@ -146,6 +161,7 @@ protected:
       obj.Set("index", Napi::Number::New(env, info.index));
       SetU16(obj, "name", env, info.name);
       SetU16(obj, "mimeType", env, info.mimeType);
+      SetU16IfPresent(obj, "afRelationship", env, info.afRelationship);
       SetU16IfPresent(obj, "creationDate", env, info.creationDate);
       SetU16IfPresent(obj, "modDate", env, info.modDate);
       arr.Set(i, obj);

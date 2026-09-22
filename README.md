@@ -358,10 +358,13 @@ interface Attachment {
   index: number; // 0-based index in the embedded-files name tree
   name: string; // file name, e.g. 'factur-x.xml'
   mimeType: string; // /Subtype, e.g. 'text/xml' ('' if the PDF omits it)
+  afRelationship?: string; // /AFRelationship, e.g. 'Alternative' (absent if the PDF omits it)
   creationDate?: string; // PDF date string, e.g. 'D:20250101120000Z'
   modDate?: string; // PDF date string
 }
 ```
+
+`afRelationship` is the associated-file relationship defined by PDF 2.0 (ISO 32000-2:2020, Table 43) and used by PDF/A-3: it states an embedded file's _role_ rather than its type. A ZUGFeRD / Factur-X e-invoice marks the machine-readable invoice XML `Alternative` (it is an alternative representation of the visible page), while a human-readable companion is `Supplement`; `Source`, `Data` and `Unspecified` are the other standard values. Without it, an e-invoice reader has to guess which attachment is the invoice from its file name. The key is absent when the PDF omits the entry, and `addAttachments()` cannot set it (see [Writing attachments](#addattachmentsinput-attachments-options)), so attachments written by this library report no value.
 
 #### `getAttachment(index, options?)`
 
