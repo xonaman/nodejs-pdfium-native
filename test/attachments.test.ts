@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { loadDocument } from '../lib/index.js';
+import { addAttachments, loadDocument } from '../lib/index.js';
 
 const fixture = (name: string) => resolve(import.meta.dirname!, 'fixtures', name);
 
@@ -64,6 +64,33 @@ describe('PDFiumDocument.getAttachments', () => {
 
     const notes = findByName(attachments, 'notes.txt');
     expect(notes.mimeType).toBe('text/plain');
+
+    doc.destroy();
+  });
+
+  it('reports the /AFRelationship of each embedded file', async () => {
+    const doc = await loadDocument(fixture('einvoice-zugferd.pdf'));
+    const attachments = await doc.getAttachments();
+
+    // the structured invoice is the machine-readable alternative to the page
+    // content, while the notes file merely supplements it
+    expect(findByName(attachments, 'factur-x.xml').afRelationship).toBe('Alternative');
+    expect(findByName(attachments, 'notes.txt').afRelationship).toBe('Supplement');
+
+    doc.destroy();
+  });
+
+  it('omits afRelationship when the PDF has no /AFRelationship entry', async () => {
+    // addAttachments cannot write /AFRelationship, so a round-trip through it
+    // is the absent case; the key must be missing rather than an empty string
+    const pdf = await addAttachments(fixture('minimal.pdf'), [
+      { name: 'data.xml', data: Buffer.from('<x/>') },
+    ]);
+    const doc = await loadDocument(pdf);
+
+    const [entry] = await doc.getAttachments();
+    expect(entry.afRelationship).toBeUndefined();
+    expect('afRelationship' in entry).toBe(false);
 
     doc.destroy();
   });

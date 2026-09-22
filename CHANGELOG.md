@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Added
+
+- `Attachment.afRelationship` on `getAttachments()`: the `/AFRelationship` entry (PDF 2.0, ISO 32000-2:2020 Table 43) states an embedded file's _role_ rather than its type — a ZUGFeRD / Factur-X e-invoice marks the machine-readable invoice XML `Alternative` and a human-readable companion `Supplement`, alongside `Source`, `Data` and `Unspecified`. Without it a reader had to guess which attachment was the invoice from its file name. The key is absent when the PDF omits the entry; PDFium reports "absent" and "present but not a name" identically, so neither is surfaced as `''`. `addAttachments()` still cannot set it — the entry sits on the file-specification dictionary, which the write path does not build — so attachments written by this library report no value.
+
+### Changed
+
+- Bumped the bundled PDFium to `chromium/8066` (156.0.8066.0) from `chromium/7920`. This is the first build carrying `FPDFAttachment_GetAFRelationship()`, the API behind `Attachment.afRelationship`, which this project contributed upstream ([pdfium CL 154470](https://pdfium-review.googlesource.com/c/pdfium/+/154470)).
+
 ## [0.9.1] - 2026-08-07
 
 Fixes for defects found by an adversarial audit of the 0.9.0 release. Every item

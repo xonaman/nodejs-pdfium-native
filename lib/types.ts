@@ -510,6 +510,14 @@ export interface Attachment {
   name: string;
   /** MIME type (/Subtype), e.g. 'text/xml'. Empty string if the PDF omits it. */
   mimeType: string;
+  /**
+   * Associated-file relationship (/AFRelationship, PDF 2.0) describing the
+   * embedded file's role, e.g. 'Alternative' for a ZUGFeRD/Factur-X invoice
+   * XML, 'Supplement' for a human-readable companion, or 'Source' / 'Data' /
+   * 'Unspecified'. Absent when the PDF omits the entry. Note `addAttachments`
+   * cannot set it, so attachments written by this library report no value.
+   */
+  afRelationship?: string;
   /** Creation date as a PDF date string (e.g. 'D:20250101120000Z'). Absent if not set. */
   creationDate?: string;
   /** Modification date as a PDF date string. Absent if not set. */
