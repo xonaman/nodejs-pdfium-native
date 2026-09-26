@@ -90,6 +90,13 @@ protected:
     // signature and attachment counts
     signatureCount_ = FPDF_GetSignatureCount(doc_);
     attachmentCount_ = FPDFDoc_GetAttachmentCount(doc_);
+    // Read here rather than left to getNamedDestinations(), because that
+    // listing is the one that can come back shorter than its own count: a
+    // legacy /Dests entry whose value is an indirect reference is counted and
+    // then cannot be resolved or even named through the index API. Exposing
+    // the count is what makes that gap visible to a caller.
+    namedDestinationCount_ =
+        static_cast<double>(FPDF_CountNamedDests(doc_));
 
     // file identifiers (raw byte strings → hex)
     auto readFileId = [&](FPDF_FILEIDTYPE idType) -> std::string {
@@ -155,6 +162,8 @@ protected:
     SetU16(metaObj, "language", env, language_);
     metaObj.Set("signatureCount", Napi::Number::New(env, signatureCount_));
     metaObj.Set("attachmentCount", Napi::Number::New(env, attachmentCount_));
+    metaObj.Set("namedDestinationCount",
+                Napi::Number::New(env, namedDestinationCount_));
     if (!permanentId_.empty())
       metaObj.Set("permanentId", Napi::String::New(env, permanentId_));
     if (!changingId_.empty())
@@ -190,6 +199,7 @@ private:
   std::u16string language_;
   int signatureCount_ = 0;
   int attachmentCount_ = 0;
+  double namedDestinationCount_ = 0;
   std::string permanentId_;
   std::string changingId_;
 };

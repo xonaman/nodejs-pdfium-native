@@ -497,6 +497,17 @@ export interface DocumentMetadata {
   signatureCount: number;
   /** Number of file attachments in the document. */
   attachmentCount: number;
+  /**
+   * Number of named destinations PDFium counts in the document — the
+   * `/Names /Dests` name tree plus the legacy catalog `/Dests` dictionary.
+   *
+   * `getNamedDestinations()` can return fewer entries than this: an entry
+   * whose value is an indirect reference is counted but cannot be resolved or
+   * named through PDFium's index-based lookup. A mismatch means destinations
+   * exist that the listing could not enumerate; `getNamedDestination(name)`
+   * still resolves them.
+   */
+  namedDestinationCount: number;
   /** Permanent file identifier (hex string). */
   permanentId?: string;
   /** Changing file identifier (hex string, updated on each save). */
@@ -655,6 +666,7 @@ export interface NativeDocument {
   getSignatureContents(index: number, outputPath?: string): Promise<Buffer | undefined>;
   getJavaScriptActions(): Promise<(JavaScriptAction | null)[]>;
   getNamedDestinations(): Promise<NamedDestination[]>;
+  getNamedDestination(name: string): Promise<NamedDestination | null>;
   destroy(): void;
 }
 

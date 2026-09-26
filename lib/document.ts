@@ -174,13 +174,39 @@ export class PDFiumDocument {
    * This resolves a name like `Chapter2` to a concrete page index without
    * walking every link on every page.
    *
-   * A destination PDFium cannot resolve is omitted. Unlike the other counted
-   * listings this one does not report such an entry, because its null is
-   * ambiguous: a legal legacy `/Dests` entry whose value is an indirect
-   * reference is counted but not resolved by the index-based lookup, so
-   * reporting it would flag healthy documents. See `destinations_worker.h`.
+   * **This is the one listing in the library that can come back shorter than
+   * its own count.** A legal legacy `/Dests` entry whose value is an indirect
+   * reference is counted by PDFium and then resolved by neither of the two
+   * things the index-based lookup could return: it yields no destination and
+   * writes no name, so the entry cannot be reported even as a `null` the way
+   * the other counted listings report theirs. Compare the length against
+   * `metadata.namedDestinationCount` to detect the gap, and use
+   * {@link getNamedDestination} to resolve such a destination by name — that
+   * path goes through PDFium's own name lookup, which dereferences the value
+   * and finds it.
    */
   getNamedDestinations(): Promise<NamedDestination[]> {
     return withConcurrency(() => this.native.getNamedDestinations());
+  }
+
+  /**
+   * Resolves a single named destination by name, or `null` when the document
+   * has none with that name.
+   *
+   * Prefer this over scanning {@link getNamedDestinations} when a name is
+   * already in hand — following `#Chapter2` from an incoming link, say. It
+   * searches the `/Names /Dests` name tree and the legacy catalog `/Dests`
+   * dictionary alike and dereferences an indirect value in either, so it
+   * reaches destinations the listing cannot enumerate.
+   *
+   * The name is matched as bytes, against the raw name-tree key. Names are
+   * ASCII in practice; one stored in UTF-16BE or PDFDocEncoding will not be
+   * found by its decoded form.
+   */
+  getNamedDestination(name: string): Promise<NamedDestination | null> {
+    if (typeof name !== 'string') {
+      throw new TypeError('name must be a string');
+    }
+    return withConcurrency(() => this.native.getNamedDestination(name));
   }
 }
