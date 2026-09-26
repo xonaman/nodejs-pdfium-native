@@ -44,7 +44,7 @@ describe('PDFiumPage.getStructTree', () => {
     await withStructTree((tree) => {
       expect(tree).toHaveLength(1);
 
-      const [root] = tree;
+      const root = tree[0]!;
       expect(root.type).toBe('Document');
       expect(root.objType).toBe('StructElem');
       expect(root.children?.map((c) => c.type)).toEqual(['H1', 'P', 'Figure']);
@@ -53,7 +53,7 @@ describe('PDFiumPage.getStructTree', () => {
 
   it('reports the title of an element', async () => {
     await withStructTree((tree) => {
-      const heading = tree[0].children![0];
+      const heading = tree[0]!.children![0]!;
       expect(heading.type).toBe('H1');
       expect(heading.title).toBe('Main heading');
     });
@@ -61,7 +61,7 @@ describe('PDFiumPage.getStructTree', () => {
 
   it('reports alt text, actual text and id on a figure', async () => {
     await withStructTree((tree) => {
-      const figure = tree[0].children!.find((c) => c.type === 'Figure')!;
+      const figure = tree[0]!.children!.find((c) => c.type === 'Figure')!;
       expect(figure.altText).toBe('A red square');
       expect(figure.actualText).toBe('Figure 1');
       expect(figure.id).toBe('fig1');
@@ -70,24 +70,24 @@ describe('PDFiumPage.getStructTree', () => {
 
   it('reports a language override on the element that carries it', async () => {
     await withStructTree((tree) => {
-      expect(tree[0].lang).toBe('en-US');
-      expect(tree[0].children!.find((c) => c.type === 'P')!.lang).toBe('de-DE');
+      expect(tree[0]!.lang).toBe('en-US');
+      expect(tree[0]!.children!.find((c) => c.type === 'P')!.lang).toBe('de-DE');
       // the heading has no /Lang of its own
-      expect(tree[0].children!.find((c) => c.type === 'H1')!.lang).toBeUndefined();
+      expect(tree[0]!.children!.find((c) => c.type === 'H1')!.lang).toBeUndefined();
     });
   });
 
   it('reports marked content IDs, and omits the key when there is none', async () => {
     await withStructTree((tree) => {
-      expect(tree[0].children!.map((c) => c.markedContentId)).toEqual([0, 1, 2]);
+      expect(tree[0]!.children!.map((c) => c.markedContentId)).toEqual([0, 1, 2]);
       // the Document element wraps others rather than page content
-      expect(tree[0].markedContentId).toBeUndefined();
+      expect(tree[0]!.markedContentId).toBeUndefined();
     });
   });
 
   it('omits optional keys that the element does not set', async () => {
     await withStructTree((tree) => {
-      const paragraph = tree[0].children!.find((c) => c.type === 'P')!;
+      const paragraph = tree[0]!.children!.find((c) => c.type === 'P')!;
       expect(paragraph.altText).toBeUndefined();
       expect(paragraph.actualText).toBeUndefined();
       expect(paragraph.title).toBeUndefined();

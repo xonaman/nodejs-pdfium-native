@@ -1,0 +1,22 @@
+{
+  // The published build (tsconfig.json) compiles lib/ alone: it emits into dist/
+  // with rootDir "lib", so test/ cannot simply be added to its include list.
+  // This config type-checks the tests against those same strict options without
+  // emitting anything, so a test that mishandles a lib type -- an unchecked
+  // index, an ignored null in a listing -- fails `npm run typecheck` instead of
+  // passing silently because tsc never looked at test/.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "types": ["node"],
+    // test/prebuild.test.ts imports the plain-JS build scripts it exercises;
+    // allowJs lets tsc infer their shapes instead of failing on an implicit
+    // any. checkJs stays off, so scripts/ is a source of types here, not a
+    // thing this config type-checks.
+    "allowJs": true,
+    "checkJs": false
+  },
+  "include": ["lib/**/*.ts", "test/**/*.ts"],
+  "exclude": ["node_modules", "build", "deps", "dist"]
+}

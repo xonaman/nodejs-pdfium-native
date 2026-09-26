@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { loadDocument } from '../lib/index.js';
+import { allLoaded } from './helpers.js';
 
 const fixture = (name: string) => resolve(import.meta.dirname!, 'fixtures', name);
 
@@ -28,7 +29,7 @@ describe('PDFiumPage.getFormFields', () => {
   it('reads text field with value', async () => {
     const doc = await loadDocument(fixture('form-fields.pdf'));
     const page = await doc.getPage(0);
-    const fields = await page.getFormFields();
+    const fields = allLoaded(await page.getFormFields());
 
     const fullName = fields.find((f) => f.name === 'fullName');
     expect(fullName).toBeDefined();
@@ -43,7 +44,7 @@ describe('PDFiumPage.getFormFields', () => {
   it('reads empty text field', async () => {
     const doc = await loadDocument(fixture('form-fields.pdf'));
     const page = await doc.getPage(0);
-    const fields = await page.getFormFields();
+    const fields = allLoaded(await page.getFormFields());
 
     const email = fields.find((f) => f.name === 'email');
     expect(email).toBeDefined();
@@ -57,7 +58,7 @@ describe('PDFiumPage.getFormFields', () => {
   it('reads checked and unchecked checkboxes', async () => {
     const doc = await loadDocument(fixture('form-fields.pdf'));
     const page = await doc.getPage(0);
-    const fields = await page.getFormFields();
+    const fields = allLoaded(await page.getFormFields());
 
     const agree = fields.find((f) => f.name === 'agree');
     expect(agree).toBeDefined();
@@ -76,7 +77,7 @@ describe('PDFiumPage.getFormFields', () => {
   it('reads radio button group', async () => {
     const doc = await loadDocument(fixture('form-fields.pdf'));
     const page = await doc.getPage(0);
-    const fields = await page.getFormFields();
+    const fields = allLoaded(await page.getFormFields());
 
     const radios = fields.filter((f) => f.name === 'color');
     expect(radios.length).toBe(3);
@@ -93,7 +94,7 @@ describe('PDFiumPage.getFormFields', () => {
   it('reads combo box with options', async () => {
     const doc = await loadDocument(fixture('form-fields.pdf'));
     const page = await doc.getPage(0);
-    const fields = await page.getFormFields();
+    const fields = allLoaded(await page.getFormFields());
 
     const country = fields.find((f) => f.name === 'country');
     expect(country).toBeDefined();
@@ -110,7 +111,7 @@ describe('PDFiumPage.getFormFields', () => {
   it('reads list box with options', async () => {
     const doc = await loadDocument(fixture('form-fields.pdf'));
     const page = await doc.getPage(0);
-    const fields = await page.getFormFields();
+    const fields = allLoaded(await page.getFormFields());
 
     const fruits = fields.find((f) => f.name === 'fruits');
     expect(fruits).toBeDefined();
@@ -122,7 +123,7 @@ describe('PDFiumPage.getFormFields', () => {
     // Cherry should be selected
     const selected = fruits!.options!.filter((o) => o.isSelected);
     expect(selected.length).toBe(1);
-    expect(selected[0].label).toBe('Cherry');
+    expect(selected[0]!.label).toBe('Cherry');
 
     page.close();
     doc.destroy();
@@ -131,7 +132,7 @@ describe('PDFiumPage.getFormFields', () => {
   it('all fields have flags property', async () => {
     const doc = await loadDocument(fixture('form-fields.pdf'));
     const page = await doc.getPage(0);
-    const fields = await page.getFormFields();
+    const fields = allLoaded(await page.getFormFields());
 
     for (const field of fields) {
       expect(typeof field.flags).toBe('number');
