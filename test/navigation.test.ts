@@ -107,3 +107,38 @@ describe('PDFiumDocument.getNamedDestinations', () => {
     await expect(doc.getNamedDestinations()).rejects.toThrow('Document is destroyed');
   });
 });
+
+// A document-open script that cannot be decoded is more interesting to a
+// triage caller than no script at all, so it is reported as a null entry
+// rather than dropped.
+describe('PDFiumDocument.getJavaScriptActions with an unloadable action', () => {
+  it('reports a null for every action that fails, including a trailing one', async () => {
+    const doc = await loadDocument(fixture('dangling-javascript.pdf'));
+
+    const actions = await doc.getJavaScriptActions();
+
+    // two of the three fail, and one of them is the last entry — a trailing
+    // failure is the shape most likely to be lost, since the array length
+    // comes from the allocation rather than from the final assignment
+    expect(actions).toHaveLength(3);
+    expect(actions[1]).toBeNull();
+    expect(actions[2]).toBeNull();
+
+    expect(actions[0]).toBeTruthy();
+    expect(actions[0]!.index).toBe(0);
+    expect(actions[0]!.name).toBe('script_alpha');
+
+    // "no scripts" and "scripts I could not read" are distinguishable
+    expect(actions.filter((a) => a === null)).toHaveLength(2);
+
+    doc.destroy();
+  });
+
+  it('leaves an intact document free of null entries', async () => {
+    const doc = await loadDocument(fixture('navigation.pdf'));
+    const actions = await doc.getJavaScriptActions();
+    expect(actions.length).toBeGreaterThan(0);
+    expect(actions.every((a) => a !== null)).toBe(true);
+    doc.destroy();
+  });
+});

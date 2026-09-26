@@ -32,8 +32,8 @@ afterAll(async () => {
 });
 
 // factur-x.xml / notes.txt embedded by scripts/generate-fixtures.mjs
-const findByName = (list: { name: string }[], name: string) => {
-  const found = list.find((a) => a.name === name);
+const findByName = (list: ({ name: string } | null)[], name: string) => {
+  const found = list.find((a) => a?.name === name);
   if (!found) throw new Error(`attachment ${name} not found`);
   return found as never;
 };
@@ -89,8 +89,84 @@ describe('PDFiumDocument.getAttachments', () => {
     const doc = await loadDocument(pdf);
 
     const [entry] = await doc.getAttachments();
-    expect(entry.afRelationship).toBeUndefined();
-    expect('afRelationship' in entry).toBe(false);
+    expect(entry).toBeTruthy();
+    expect(entry!.afRelationship).toBeUndefined();
+    expect('afRelationship' in entry!).toBe(false);
+
+    doc.destroy();
+  });
+});
+
+// Regression tests for issue #34. damaged-attachment.pdf carries two embedded
+// files whose /EmbeddedFiles name tree points its first file-specification at
+// an object that does not exist, so FPDFDoc_GetAttachmentCount counts two while
+// FPDFDoc_GetAttachment resolves only one. The failed index used to be dropped,
+// which made the array shorter than metadata.attachmentCount with nothing to
+// distinguish damage from a document that has no attachments at all.
+describe('PDFiumDocument.getAttachments with an unloadable embedded file', () => {
+  it('reports a null entry instead of silently shortening the array', async () => {
+    const doc = await loadDocument(fixture('damaged-attachment.pdf'));
+
+    expect(doc.metadata.attachmentCount).toBe(2);
+    const attachments = await doc.getAttachments();
+
+    // the invariant the old behaviour broke
+    expect(attachments).toHaveLength(doc.metadata.attachmentCount);
+    expect(attachments[0]).toBeNull();
+
+    doc.destroy();
+  });
+
+  it('keeps the surviving attachment at its true index', async () => {
+    const doc = await loadDocument(fixture('damaged-attachment.pdf'));
+    const attachments = await doc.getAttachments();
+
+    // array position is the document index, so the survivor does not slide
+    // down into the hole the failed entry left
+    expect(attachments).toHaveLength(2);
+    const notes = attachments[1];
+    expect(notes).toBeTruthy();
+    expect(notes!.index).toBe(1);
+    expect(notes!.name).toBe('notes.txt');
+    expect(notes!.mimeType).toBe('text/plain');
+
+    // and it is still fully readable
+    const bytes = await doc.getAttachment(notes!.index);
+    expect(bytes.toString('utf8')).toContain('Human-readable notes.');
+
+    doc.destroy();
+  });
+
+  it('lets a caller tell damage apart from a document with no attachments', async () => {
+    const damaged = await loadDocument(fixture('damaged-attachment.pdf'));
+    const empty = await loadDocument(fixture('minimal.pdf'));
+
+    const damagedList = await damaged.getAttachments();
+    const emptyList = await empty.getAttachments();
+
+    // both used to be indistinguishable from `list.every(Boolean)`'s point of
+    // view once the failed entry was dropped
+    expect(damagedList.some((a) => a === null)).toBe(true);
+    expect(emptyList.some((a) => a === null)).toBe(false);
+    expect(emptyList).toHaveLength(0);
+
+    damaged.destroy();
+    empty.destroy();
+  });
+
+  it('rejects when reading the bytes of the unloadable index', async () => {
+    const doc = await loadDocument(fixture('damaged-attachment.pdf'));
+    // the null in the listing and the rejection here are the same failure
+    await expect(doc.getAttachment(0)).rejects.toThrow('Failed to get attachment');
+    doc.destroy();
+  });
+
+  it('leaves an intact document free of null entries', async () => {
+    const doc = await loadDocument(fixture('einvoice-zugferd.pdf'));
+    const attachments = await doc.getAttachments();
+
+    expect(attachments).toHaveLength(doc.metadata.attachmentCount);
+    expect(attachments.every((a) => a !== null)).toBe(true);
 
     doc.destroy();
   });

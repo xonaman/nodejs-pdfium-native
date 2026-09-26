@@ -22,6 +22,12 @@
 
 struct JavaScriptActionInfo {
   int index = 0;
+  // FPDFDoc_GetJavaScriptAction returned NULL for this index -- documented as
+  // "NULL on failure", so the action is counted but could not be loaded.
+  // Serialized as a null entry rather than dropped: a document-open script
+  // that cannot be read is exactly what a caller triaging an untrusted PDF
+  // needs to know about.
+  bool failed = false;
   std::u16string name;
   std::u16string script;
 };
@@ -50,8 +56,15 @@ protected:
     actions_.reserve(count);
     for (int i = 0; i < count; i++) {
       FPDF_JAVASCRIPT_ACTION action = FPDFDoc_GetJavaScriptAction(doc_, i);
-      if (!action)
+      if (!action) {
+        // The count promised this index, so a NULL handle is damage,
+        // not absence. Dropping it silently shortened the array.
+        JavaScriptActionInfo missing;
+        missing.index = i;
+        missing.failed = true;
+        actions_.push_back(std::move(missing));
         continue;
+      }
 
       JavaScriptActionInfo info;
       info.index = i;
@@ -84,6 +97,10 @@ protected:
     Napi::Array arr = Napi::Array::New(env, actions_.size());
     for (uint32_t i = 0; i < actions_.size(); i++) {
       const auto &info = actions_[i];
+      if (info.failed) {
+        arr.Set(i, env.Null());
+        continue;
+      }
       Napi::Object obj = Napi::Object::New(env);
       obj.Set("index", Napi::Number::New(env, info.index));
       SetU16(obj, "name", env, info.name);

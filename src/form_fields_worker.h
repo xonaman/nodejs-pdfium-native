@@ -20,6 +20,17 @@ struct FormFieldOptionData {
 };
 
 struct FormFieldData {
+  // FPDFPage_GetAnnot returned NULL for an annotation on this page --
+  // documented as "NULL on failure". Because the subtype is only readable
+  // through that handle, there is no way to tell whether the unloadable
+  // annotation was a widget, so it cannot be filtered out the way a known
+  // non-widget is. It is serialized as a null entry: "a form field may be
+  // missing here" is the honest answer, and silently returning a short list
+  // let a damaged widget pass for a page that simply has fewer fields.
+  // This listing is a filtered subset, so there is no page index to carry on
+  // the sentinel; getAnnotations() on the same page reports the identical
+  // failure at its true index.
+  bool failed = false;
   std::string type;
   std::u16string name;
   std::u16string value;
@@ -59,10 +70,17 @@ protected:
     }
 
     int count = FPDFPage_GetAnnotCount(page_);
+    // an upper bound: widgets plus any annotation that fails to load
+    if (count > 0)
+      fields_.reserve(count);
     for (int i = 0; i < count; i++) {
       FPDF_ANNOTATION annot = FPDFPage_GetAnnot(page_, i);
-      if (!annot)
+      if (!annot) {
+        FormFieldData missing;
+        missing.failed = true;
+        fields_.push_back(std::move(missing));
         continue;
+      }
 
       // only process widget annotations (form fields)
       if (FPDFAnnot_GetSubtype(annot) != FPDF_ANNOT_WIDGET) {
@@ -205,6 +223,10 @@ protected:
     Napi::Array arr = Napi::Array::New(env, fields_.size());
     for (uint32_t i = 0; i < fields_.size(); i++) {
       auto &d = fields_[i];
+      if (d.failed) {
+        arr.Set(i, env.Null());
+        continue;
+      }
       Napi::Object obj = Napi::Object::New(env);
       obj.Set("type", Napi::String::New(env, d.type));
       SetU16(obj, "name", env, d.name);

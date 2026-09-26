@@ -1,0 +1,94 @@
+%PDF-1.7
+%ÅÅÅÅ
+
+1 0 obj
+<<
+/Type /Pages
+/Kids [ 4 0 R ]
+/Count 1
+>>
+endobj
+
+2 0 obj
+<<
+/Type /Catalog
+/Pages 1 0 R
+/Names 9 0 R
+>>
+endobj
+
+3 0 obj
+<<
+/Producer <FEFF007000640066002D006C006900620020002800680074007400700073003A002F002F006700690074006800750062002E0063006F006D002F0048006F007000640069006E0067002F007000640066002D006C006900620029>
+/ModDate (D:20260925210720Z)
+/Creator <FEFF007000640066002D006C006900620020002800680074007400700073003A002F002F006700690074006800750062002E0063006F006D002F0048006F007000640069006E0067002F007000640066002D006C006900620029>
+/CreationDate (D:20260925210720Z)
+>>
+endobj
+
+4 0 obj
+<<
+/Type /Page
+/Parent 1 0 R
+/Resources <<
+>>
+/MediaBox [ 0 0 612 792 ]
+>>
+endobj
+
+5 0 obj
+<<
+/S /JavaScript
+/JS (app.alert("alpha");)
+>>
+endobj
+
+6 0 obj
+<<
+/S /JavaScript
+/JS (app.alert("beta");)
+>>
+endobj
+
+7 0 obj
+<<
+/S /JavaScript
+/JS (app.alert("gamma");)
+>>
+endobj
+
+8 0 obj
+<<
+/Names [ (script_alpha) 5 0 R (script_beta) 9999 0 R (script_gamma) 9999 0 R ]
+>>
+endobj
+
+9 0 obj
+<<
+/JavaScript 8 0 R
+>>
+endobj
+
+xref
+0 10
+0000000000 65535 f 
+0000000016 00000 n 
+0000000076 00000 n 
+0000000139 00000 n 
+0000000609 00000 n 
+0000000700 00000 n 
+0000000763 00000 n 
+0000000825 00000 n 
+0000000888 00000 n 
+0000000989 00000 n 
+
+trailer
+<<
+/Size 10
+/Root 2 0 R
+/Info 3 0 R
+>>
+
+startxref
+1029
+%%EOF

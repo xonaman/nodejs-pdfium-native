@@ -493,6 +493,174 @@ async function createEInvoicePdf() {
   return doc.save();
 }
 
+// --- PDF whose /EmbeddedFiles name tree points at a missing object ---
+// Regression fixture for issue #34. FPDFDoc_GetAttachmentCount counts the slots
+// in the name tree, but FPDFDoc_GetAttachment resolves each one and returns
+// NULL when that fails. Pointing the first filespec at an object that does not
+// exist makes the two disagree: the count still says 2, while only the second
+// attachment loads. getAttachments() used to drop the failed entry silently, so
+// the array came back shorter than metadata.attachmentCount with no way for a
+// caller to tell damage from a document that simply has no embedded files.
+async function createDamagedAttachmentPdf() {
+  const { AFRelationship, PDFName, PDFDict, PDFRef } = await import('pdf-lib');
+  const doc = await PDFDocument.create();
+  doc.setTitle('Damaged embedded-file name tree');
+  doc.setProducer('pdfium-native test');
+  const page = doc.addPage([612, 792]);
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  page.drawText('Invoice RE-2025-0002', { x: 50, y: 700, size: 16, font });
+  page.drawText('factur-x.xml is present but unreachable', { x: 50, y: 670, size: 11, font });
+
+  const dates = {
+    creationDate: new Date('2025-01-01T12:00:00Z'),
+    modificationDate: new Date('2025-01-01T12:00:00Z'),
+  };
+  await doc.attach(Buffer.from(FACTUR_X_XML, 'utf8'), 'factur-x.xml', {
+    mimeType: 'text/xml',
+    description: 'Factur-X invoice',
+    afRelationship: AFRelationship.Alternative,
+    ...dates,
+  });
+  await doc.attach(Buffer.from('Human-readable notes.\n', 'utf8'), 'notes.txt', {
+    mimeType: 'text/plain',
+    description: 'Supplementary notes',
+    afRelationship: AFRelationship.Supplement,
+    ...dates,
+  });
+
+  // Reload so the name tree exists as a concrete object, then dangle the first
+  // filespec reference. /Names alternates [name, filespec, name, filespec], so
+  // slot 1 is the file specification for attachment index 0.
+  const reloaded = await PDFDocument.load(await doc.save({ useObjectStreams: false }));
+  reloaded.catalog
+    .lookup(PDFName.of('Names'), PDFDict)
+    .lookup(PDFName.of('EmbeddedFiles'), PDFDict)
+    .lookup(PDFName.of('Names'))
+    .set(1, PDFRef.of(9999, 0));
+
+  return reloaded.save({ useObjectStreams: false });
+}
+
+// --- page whose middle /Annots entry points at a missing object ---
+// FPDFPage_GetAnnotCount counts the raw /Annots array, but FPDFPage_GetAnnot
+// resolves each slot and returns NULL when it does not yield a dictionary. The
+// page below reports three annotations while only slots 0 and 2 load, so the
+// listing used to come back with an unexplained gap at index 1.
+async function createDanglingAnnotationPdf() {
+  const { PDFName, PDFRef, PDFString } = await import('pdf-lib');
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([612, 792]);
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  page.drawText('Page with a dangling annotation', { x: 50, y: 700, size: 16, font });
+
+  const annot = (subtype, rect, contents, color) =>
+    doc.context.register(
+      doc.context.obj({
+        Type: 'Annot',
+        Subtype: subtype,
+        Rect: rect,
+        Contents: PDFString.of(contents),
+        C: color,
+      }),
+    );
+
+  page.node.set(
+    PDFName.of('Annots'),
+    doc.context.obj([
+      annot('Text', [100, 600, 120, 620], 'sticky note', [1, 0, 0]),
+      annot('Square', [150, 600, 200, 650], 'square', [0, 1, 0]),
+      annot('Circle', [250, 600, 300, 650], 'circle', [0, 0, 1]),
+    ]),
+  );
+
+  // re-open so /Annots is a concrete array, then dangle the middle slot
+  const reloaded = await PDFDocument.load(await doc.save({ useObjectStreams: false }));
+  reloaded.getPages()[0].node.lookup(PDFName.of('Annots')).set(1, PDFRef.of(9999, 0));
+  return reloaded.save({ useObjectStreams: false });
+}
+
+// --- document-open JavaScript whose middle action reference dangles ---
+// The /Names /JavaScript tree has the same [name, ref, name, ref] shape as
+// /EmbeddedFiles, and fails the same way: FPDFDoc_GetJavaScriptActionCount
+// counts three actions while FPDFDoc_GetJavaScriptAction resolves only one.
+// A script a triage tool cannot read is worth more attention than no script.
+// Two of the three are dangled, and one of them is the LAST entry: a trailing
+// failure is the shape most likely to be lost, since the array length is
+// carried by the allocation rather than by the final Set.
+async function createDanglingJavaScriptPdf() {
+  const { PDFName, PDFDict, PDFArray, PDFRef, PDFString } = await import('pdf-lib');
+  const doc = await PDFDocument.create();
+  doc.addPage([612, 792]);
+
+  const action = (src) =>
+    doc.context.register(doc.context.obj({ S: 'JavaScript', JS: PDFString.of(src) }));
+
+  // name-tree entries must be sorted by name
+  const jsLeaf = doc.context.obj({
+    Names: [
+      PDFString.of('script_alpha'),
+      action('app.alert("alpha");'),
+      PDFString.of('script_beta'),
+      action('app.alert("beta");'),
+      PDFString.of('script_gamma'),
+      action('app.alert("gamma");'),
+    ],
+  });
+  doc.catalog.set(
+    PDFName.of('Names'),
+    doc.context.register(doc.context.obj({ JavaScript: doc.context.register(jsLeaf) })),
+  );
+
+  // slots 3 and 5 are the action references for indices 1 and 2
+  const broken = await PDFDocument.load(await doc.save({ useObjectStreams: false }));
+  const names = broken.catalog
+    .lookup(PDFName.of('Names'), PDFDict)
+    .lookup(PDFName.of('JavaScript'), PDFDict)
+    .lookup(PDFName.of('Names'), PDFArray);
+  names.set(3, PDFRef.of(9999, 0));
+  names.set(5, PDFRef.of(9999, 0));
+  return broken.save({ useObjectStreams: false });
+}
+
+// --- form page that counts a widget it cannot load ---
+// The page's /Annots array keeps all its entries, so FPDFPage_GetAnnotCount is
+// unchanged, but two slots point at objects that do not exist. Because the
+// annotation subtype is only readable through the handle that failed, an
+// unloadable slot cannot be ruled out as a non-widget, and this fixture makes
+// that distinction observable: one damaged slot was the 'fullName' widget, so
+// a form field really is missing (its AcroForm /Fields entry is deliberately
+// left intact, so the document still declares a field the page cannot hand
+// out); the other was a plain Text annotation, which would have been filtered
+// out anyway, so its null marks nothing. Nothing in the result can tell them
+// apart, which is exactly what getFormFields() promises and no all-widget
+// fixture can exercise.
+async function createDamagedWidgetPdf() {
+  const { PDFName, PDFArray, PDFRef, PDFString } = await import('pdf-lib');
+  const doc = await PDFDocument.load(await createFormFieldsPdf());
+  const annots = doc.getPage(0).node.lookup(PDFName.of('Annots'), PDFArray);
+
+  // two non-widget annotations, appended after the nine widgets
+  for (const [y, note] of [
+    [520, 'a plain note, not a form field'],
+    [480, 'another non-widget annotation'],
+  ]) {
+    annots.push(
+      doc.context.register(
+        doc.context.obj({
+          Type: 'Annot',
+          Subtype: 'Text',
+          Rect: [400, y, 420, y + 20],
+          Contents: PDFString.of(note),
+        }),
+      ),
+    );
+  }
+
+  annots.set(0, PDFRef.of(9999, 0)); // the 'fullName' text-field widget
+  annots.set(9, PDFRef.of(9999, 0)); // the first Text annotation
+  return doc.save({ useObjectStreams: false });
+}
+
 // --- PDF containing a non-BMP (astral) character ---
 // PDFium reports one UTF-16 code unit per character index, so an emoji arrives
 // as two consecutive lone surrogates. A ToUnicode CMap mapping the glyph for
@@ -971,6 +1139,10 @@ const fixtures = [
   ['border-annotations.pdf', createBorderAnnotationPdf],
   ['form-fields.pdf', createFormFieldsPdf],
   ['einvoice-zugferd.pdf', createEInvoicePdf],
+  ['damaged-attachment.pdf', createDamagedAttachmentPdf],
+  ['dangling-annotation.pdf', createDanglingAnnotationPdf],
+  ['dangling-javascript.pdf', createDanglingJavaScriptPdf],
+  ['damaged-widget.pdf', createDamagedWidgetPdf],
   ['file-attachment-annotation.pdf', createFileAttachmentAnnotationPdf],
   ['signed.pdf', createSignedPdf],
   ['positioned-text.pdf', createPositionedTextPdf],

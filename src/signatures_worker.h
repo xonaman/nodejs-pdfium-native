@@ -53,6 +53,18 @@ inline bool ReadSignatureContentsBytes(FPDF_SIGNATURE signature,
 
 struct SignatureInfo {
   int index = 0;
+  // FPDF_GetSignatureObject returned NULL for this index -- documented as
+  // "NULL on failure", so the signature is counted but could not be loaded.
+  // No document has been found that reaches this: thirteen damage shapes were
+  // tried and the count and the enumeration moved together every time, both
+  // entry points appearing to derive from the same collection of signature
+  // dictionaries. The branch exists so the counted listings stay uniform and
+  // to honour the documented contract across a PDFium bump, not because loss
+  // was observed -- which is also why it is the one site with no regression
+  // test.
+  // Serialized as a null entry rather than dropped, which would make the array
+  // contradict metadata.signatureCount with no way for a caller to tell.
+  bool failed = false;
   std::string subFilter;
   std::u16string reason;
   std::string time;
@@ -85,8 +97,15 @@ protected:
     signatures_.reserve(count);
     for (int i = 0; i < count; i++) {
       FPDF_SIGNATURE signature = FPDF_GetSignatureObject(doc_, i);
-      if (!signature)
+      if (!signature) {
+        // The count promised this index, so a NULL handle is damage,
+        // not absence. Dropping it silently shortened the array.
+        SignatureInfo missing;
+        missing.index = i;
+        missing.failed = true;
+        signatures_.push_back(std::move(missing));
         continue;
+      }
 
       SignatureInfo info;
       info.index = i;
@@ -136,6 +155,10 @@ protected:
     Napi::Array arr = Napi::Array::New(env, signatures_.size());
     for (uint32_t i = 0; i < signatures_.size(); i++) {
       const auto &info = signatures_[i];
+      if (info.failed) {
+        arr.Set(i, env.Null());
+        continue;
+      }
       Napi::Object obj = Napi::Object::New(env);
       obj.Set("index", Napi::Number::New(env, info.index));
       obj.Set("subFilter", Napi::String::New(env, info.subFilter));
