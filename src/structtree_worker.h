@@ -85,6 +85,15 @@ protected:
     for (int i = 0; i < count; i++) {
       if (nodeCount_ >= MAX_STRUCT_NODES)
         break;
+      // FPDF_StructTree_GetChildAtIndex returns null for a top-level element
+      // belonging to a different page. The count is document-wide -- every
+      // entry in /StructTreeRoot /K -- while this walk is per page, so a
+      // document with one /Part per chapter yields a null here for every
+      // chapter that is not this one. Expected, common in well-formed files,
+      // and simply skipped; unlike the counted collections elsewhere in this
+      // addon, a null here is not a load failure and must not be reported as
+      // a missing entry. The header (fpdf_structtree.h:55-56) says only "NULL
+      // on error" and under-documents this.
       FPDF_STRUCTELEMENT element = FPDF_StructTree_GetChildAtIndex(tree, i);
       if (!element)
         continue;

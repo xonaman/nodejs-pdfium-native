@@ -75,6 +75,20 @@ protected:
       // FPDF_GetNamedDest uses an in/out byte length rather than the usual
       // two-pass protocol, and despite the header calling the buffer a
       // wchar_t* it is written as UTF-16LE on every platform.
+      // A null here is ambiguous and must NOT be reported as a failed entry
+      // the way the other counted listings do. FPDF_GetNamedDest has two
+      // lookup paths: indices below the /Names /Dests name-tree count go
+      // through the tree, which dereferences indirect objects, while indices
+      // at or above it fall through to the legacy catalog /Dests dictionary,
+      // which does not. FPDF_CountNamedDests counts every legacy key all the
+      // same, so a perfectly legal entry whose value is an indirect reference
+      // to a destination array is counted and then returns null -- PDF
+      // 32000-1 allows an indirect reference anywhere a direct object is, and
+      // PDFium resolves those same destinations correctly through its own
+      // name lookup. Surfacing them as nulls flagged healthy documents as
+      // damaged. The legacy boundary is the total count minus the name-tree
+      // count, and PDFium exposes no way to ask for the latter, so the two
+      // cases cannot be told apart here.
       long nameLen = 0;
       FPDF_DEST dest =
           FPDF_GetNamedDest(doc_, static_cast<int>(i), nullptr, &nameLen);

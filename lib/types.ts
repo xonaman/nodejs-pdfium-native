@@ -637,9 +637,9 @@ export interface NativePage {
   renderImage(index: number, options?: ImageRenderOptions): Promise<Buffer | void>;
   getLinks(): Promise<Link[]>;
   search(text: string, options?: SearchOptions): Promise<SearchMatch[]>;
-  getAnnotations(): Promise<Annotation[]>;
+  getAnnotations(): Promise<(Annotation | null)[]>;
   getAnnotationAttachment(index: number, outputPath?: string): Promise<Buffer | undefined>;
-  getFormFields(): Promise<FormField[]>;
+  getFormFields(): Promise<(FormField | null)[]>;
   getStructTree(): Promise<StructElement[]>;
   close(): void;
 }
@@ -649,11 +649,11 @@ export interface NativeDocument {
   readonly metadata: DocumentMetadata;
   getPage(index: number): Promise<NativePage>;
   getBookmarks(): Promise<Bookmark[]>;
-  getAttachments(): Promise<Attachment[]>;
+  getAttachments(): Promise<(Attachment | null)[]>;
   getAttachment(index: number, outputPath?: string): Promise<Buffer | undefined>;
-  getSignatures(): Promise<Signature[]>;
+  getSignatures(): Promise<(Signature | null)[]>;
   getSignatureContents(index: number, outputPath?: string): Promise<Buffer | undefined>;
-  getJavaScriptActions(): Promise<JavaScriptAction[]>;
+  getJavaScriptActions(): Promise<(JavaScriptAction | null)[]>;
   getNamedDestinations(): Promise<NamedDestination[]>;
   destroy(): void;
 }

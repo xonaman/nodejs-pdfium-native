@@ -141,3 +141,60 @@ describe('PDFiumPage.getFormFields', () => {
     doc.destroy();
   });
 });
+
+// Unlike the other listings this array is a filtered subset, so its length
+// tracks no count. An annotation that fails to load still has to be reported:
+// the subtype is only readable through the handle that failed, so it cannot be
+// ruled out as a non-widget, and dropping it let a damaged widget pass for a
+// page that simply has fewer fields.
+describe('PDFiumPage.getFormFields with an unloadable annotation', () => {
+  it('reports a null entry rather than a silently shorter list', async () => {
+    const doc = await loadDocument(fixture('damaged-widget.pdf'));
+    const page = await doc.getPage(0);
+
+    const fields = await page.getFormFields();
+    expect(fields[0]).toBeNull();
+
+    // the slot at 0 was the 'fullName' text field: it is gone from the
+    // readable fields, but its absence is now marked instead of invisible
+    expect(fields.some((f) => f?.name === 'fullName')).toBe(false);
+    expect(fields.some((f) => f?.name === 'email')).toBe(true);
+
+    page.close();
+    doc.destroy();
+  });
+
+  it('cannot tell a lost field from a lost non-widget, and says so by reporting both', async () => {
+    const doc = await loadDocument(fixture('damaged-widget.pdf'));
+    const page = await doc.getPage(0);
+
+    const fields = await page.getFormFields();
+    const nulls = fields.map((f, i) => (f === null ? i : -1)).filter((i) => i >= 0);
+
+    // the fixture damages two annotations: a widget, whose field really is
+    // missing, and a plain Text annotation, which the subtype filter would
+    // have dropped anyway. The subtype is readable only through the handle
+    // that failed, so neither can be ruled out — both are reported, and
+    // nothing in the result distinguishes them. That is the documented
+    // semantics: a null here means "a form field may be missing".
+    expect(nulls).toHaveLength(2);
+
+    // eight widgets survive out of the nine the intact fixture has
+    expect(fields.filter((f) => f !== null)).toHaveLength(8);
+
+    page.close();
+    doc.destroy();
+  });
+
+  it('leaves the undamaged fixture free of null entries', async () => {
+    const doc = await loadDocument(fixture('form-fields.pdf'));
+    const page = await doc.getPage(0);
+
+    const fields = await page.getFormFields();
+    expect(fields).toHaveLength(9);
+    expect(fields.every((f) => f !== null)).toBe(true);
+
+    page.close();
+    doc.destroy();
+  });
+});

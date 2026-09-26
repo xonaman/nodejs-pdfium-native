@@ -16,6 +16,11 @@
 
 struct AnnotationData {
   int index = 0;
+  // FPDFPage_GetAnnot returned NULL for this index -- documented as "NULL on
+  // failure", so the annotation is counted on the page but could not be
+  // loaded. Serialized as a null entry rather than dropped, which would leave
+  // an unexplained gap in the `index` sequence.
+  bool failed = false;
   std::string type;
   double left = 0, bottom = 0, right = 0, top = 0;
   bool hasBounds = false;
@@ -55,10 +60,21 @@ protected:
     CHECK_ALIVE();
 
     int count = FPDFPage_GetAnnotCount(page_);
+    // reserve up front: every index now yields an entry, a failed one
+    // included, so the final size is known
+    if (count > 0)
+      annotations_.reserve(count);
     for (int i = 0; i < count; i++) {
       FPDF_ANNOTATION annot = FPDFPage_GetAnnot(page_, i);
-      if (!annot)
+      if (!annot) {
+        // The count promised this index, so a NULL handle is damage,
+        // not absence. Dropping it silently shortened the array.
+        AnnotationData missing;
+        missing.index = i;
+        missing.failed = true;
+        annotations_.push_back(std::move(missing));
         continue;
+      }
 
       AnnotationData data;
       data.index = i;
@@ -224,6 +240,10 @@ protected:
     Napi::Array arr = Napi::Array::New(env, annotations_.size());
     for (uint32_t i = 0; i < annotations_.size(); i++) {
       auto &d = annotations_[i];
+      if (d.failed) {
+        arr.Set(i, env.Null());
+        continue;
+      }
       Napi::Object obj = Napi::Object::New(env);
       obj.Set("index", Napi::Number::New(env, d.index));
       obj.Set("type", Napi::String::New(env, d.type));

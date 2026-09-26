@@ -14,9 +14,17 @@
 // ---------------------------------------------------------------------------
 // PDF/A-3 documents (ZUGFeRD / Factur-X / XRechnung e-invoices) carry the
 // structured invoice as an embedded XML file in the /EmbeddedFiles name tree.
-// FPDFDoc_GetAttachmentCount already surfaces detection via metadata; these
-// workers add the ability to enumerate attachment metadata and read the raw
-// bytes so callers can pull out factur-x.xml / zugferd-invoice.xml / etc.
+// FPDFDoc_GetAttachmentCount surfaces detection via metadata; these workers
+// add the ability to enumerate attachment metadata and read the raw bytes so
+// callers can pull out factur-x.xml / zugferd-invoice.xml / etc.
+//
+// Detection and enumeration can disagree. The count is the number of slots in
+// the name tree, but FPDFDoc_GetAttachment resolves each slot and is
+// documented to return NULL "on failure" -- a filespec reference pointing at a
+// missing object is counted yet does not load. Such an index is reported as a
+// null entry rather than dropped, so the array stays index-aligned, its length
+// keeps matching metadata.attachmentCount, and a caller deciding whether a
+// destructive operation is safe cannot read damage as "no attachments".
 
 // read a UTF-16LE string value from an attachment's params dictionary
 inline std::u16string ReadAttachmentStringValue(FPDF_ATTACHMENT attachment,
@@ -78,6 +86,9 @@ inline bool ReadAttachmentFileBytes(FPDF_ATTACHMENT attachment,
 
 struct AttachmentInfo {
   int index = 0;
+  // FPDFDoc_GetAttachment returned NULL for this index: the name tree counted
+  // the slot but PDFium could not resolve it. Serialized as a null entry.
+  bool failed = false;
   std::u16string name;
   std::u16string mimeType;
   std::u16string afRelationship;
@@ -109,8 +120,16 @@ protected:
     attachments_.reserve(count);
     for (int i = 0; i < count; i++) {
       FPDF_ATTACHMENT attachment = FPDFDoc_GetAttachment(doc_, i);
-      if (!attachment)
+      if (!attachment) {
+        // The count promised this index, so a NULL handle is damage, not
+        // absence. Dropping it made getAttachments() contradict
+        // metadata.attachmentCount with no way for a caller to tell.
+        AttachmentInfo missing;
+        missing.index = i;
+        missing.failed = true;
+        attachments_.push_back(std::move(missing));
         continue;
+      }
 
       AttachmentInfo info;
       info.index = i;
@@ -157,6 +176,10 @@ protected:
     Napi::Array arr = Napi::Array::New(env, attachments_.size());
     for (uint32_t i = 0; i < attachments_.size(); i++) {
       const auto &info = attachments_[i];
+      if (info.failed) {
+        arr.Set(i, env.Null());
+        continue;
+      }
       Napi::Object obj = Napi::Object::New(env);
       obj.Set("index", Napi::Number::New(env, info.index));
       SetU16(obj, "name", env, info.name);

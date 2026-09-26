@@ -151,8 +151,20 @@ export class PDFiumPage {
     return withConcurrency(() => this.native.search(text, options));
   }
 
-  /** Returns all annotations on the page. */
-  getAnnotations(): Promise<Annotation[]> {
+  /**
+   * Returns all annotations on the page.
+   *
+   * An entry is `null` when PDFium counted an annotation on the page but could
+   * not load it. The array always has one entry per annotation the page
+   * declares, so array position matches {@link Annotation.index} and a
+   * dropped annotation leaves no unexplained gap in that sequence.
+   *
+   * The trigger is narrower than "the document is damaged": `/Annots` slots
+   * hold an explicit PDF null object in some producers' output after an
+   * annotation is deleted, which is legal and also yields a `null` here. Read
+   * it as "this slot did not resolve to an annotation dictionary".
+   */
+  getAnnotations(): Promise<(Annotation | null)[]> {
     return withConcurrency(() => this.native.getAnnotations());
   }
 
@@ -182,8 +194,17 @@ export class PDFiumPage {
     return withConcurrency(() => this.native.getAnnotationAttachment(index, options?.output));
   }
 
-  /** Returns all form fields on the page. */
-  getFormFields(): Promise<FormField[]> {
+  /**
+   * Returns all form fields on the page.
+   *
+   * An entry is `null` when an annotation on the page could not be loaded.
+   * Unlike the other listings this array is a filtered subset — only widget
+   * annotations are form fields — and the subtype is readable only through the
+   * handle that failed, so an unloadable annotation cannot be ruled out as a
+   * non-widget. A `null` therefore means "a form field may be missing here",
+   * and array position does not track any page index.
+   */
+  getFormFields(): Promise<(FormField | null)[]> {
     return withConcurrency(() => this.native.getFormFields());
   }
 }

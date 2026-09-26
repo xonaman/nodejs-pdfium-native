@@ -135,3 +135,40 @@ describe('PDFiumPage.getAnnotations', () => {
     doc.destroy();
   });
 });
+
+// A counted annotation that PDFium cannot resolve is reported as a null entry
+// rather than dropped. Dropping it left an unexplained gap in the `index`
+// sequence, which was the only evidence a caller ever got.
+describe('PDFiumPage.getAnnotations with an unloadable annotation', () => {
+  it('reports a null entry and keeps the surrounding indices intact', async () => {
+    const doc = await loadDocument(fixture('dangling-annotation.pdf'));
+    const page = await doc.getPage(0);
+
+    const annotations = await page.getAnnotations();
+    expect(annotations).toHaveLength(3);
+    expect(annotations[1]).toBeNull();
+
+    // array position is the page's annotation index, so the survivors do not
+    // slide down into the hole
+    expect(annotations[0]!.index).toBe(0);
+    expect(annotations[0]!.type).toBe('text');
+    expect(annotations[2]!.index).toBe(2);
+    expect(annotations[2]!.type).toBe('circle');
+
+    page.close();
+    doc.destroy();
+  });
+
+  it('leaves an intact page free of null entries', async () => {
+    const doc = await loadDocument(fixture('annotations.pdf'));
+    const page = await doc.getPage(0);
+
+    const annotations = await page.getAnnotations();
+    expect(annotations.length).toBeGreaterThan(0);
+    expect(annotations.every((a) => a !== null)).toBe(true);
+    annotations.forEach((a, i) => expect(a!.index).toBe(i));
+
+    page.close();
+    doc.destroy();
+  });
+});

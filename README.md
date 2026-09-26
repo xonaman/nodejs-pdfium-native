@@ -83,6 +83,7 @@ doc.destroy();
 - [Install](#-install)
 - [Supported Platforms](#-supported-platforms)
 - [API](#-api)
+  - [Unloadable entries](#unloadable-entries)
   - [loadDocument](#loaddocumentinput-password)
   - [splitDocument](#splitdocumentinput-splitat-options)
   - [mergeDocuments](#mergedocumentsinputs-options)
@@ -116,6 +117,44 @@ Prebuilt binaries are available for all [supported platforms](#-supported-platfo
 | Windows               | x64, arm64             |
 
 ## 📚 API
+
+### Unloadable entries
+
+Five listing methods — [`getAttachments()`](#getattachments), [`getSignatures()`](#getsignatures), [`getJavaScriptActions()`](#getjavascriptactions), [`getAnnotations()`](#getannotations) and [`getFormFields()`](#getformfields) — can yield `null` in place of an entry.
+
+PDFium counts these collections and loads their members through two separate calls. The count walks a structure (a name tree, an `/Annots` array, the AcroForm field list); loading resolves each slot and is documented to return `NULL` **on failure**. A damaged document makes the two disagree: a `/EmbeddedFiles` slot whose file-specification reference points at a missing object is counted, but does not load.
+
+Such an index comes back as `null` rather than being dropped from the array. Dropping it was silent — the array simply got shorter, so `getAttachments()` could return `[]` for a document whose `metadata.attachmentCount` said `1`, and a caller had no way to tell damage from absence. That distinction decides real questions: [`splitDocument`](#splitdocumentinput-splitat-options) and [`mergeDocuments`](#mergedocumentsinputs-options) discard the embedded-files tree, so a caller who checks for attachments and then splits would destroy the file it was checking for, and for a PDF/A-3 e-invoice the embedded XML is usually the only machine-readable copy.
+
+```typescript
+const attachments = await doc.getAttachments();
+
+attachments.length === doc.metadata.attachmentCount; // always true
+attachments.every((a, i) => a === null || a.index === i); // always true
+
+// an embedded file the name tree counted but PDFium could not load
+if (attachments.some((a) => a === null)) {
+  throw new Error('document has an embedded file that could not be loaded');
+}
+```
+
+Under `strictNullChecks` the compiler flags every call site that assumed success, which is the point — the previous behaviour was invisible by construction. Use `a?.name` or filter with `(a) => a !== null` where a `null` is genuinely acceptable.
+
+A `null` reports only that the entry could not be loaded, not why. The singular reader for the same index — [`getAttachment(index)`](#getattachmentindex-options), [`getSignatureContents(index)`](#getsignaturecontentsindex-options) — rejects with the underlying failure. The converse does not hold: an entry that lists fine can still fail to yield bytes (a file specification missing its `/EF` entry, say), so a non-`null` entry is not a guarantee that reading it will succeed.
+
+Three neighbouring cases are deliberately **not** reported this way, because in none of them does `NULL` mean the entry failed to load.
+
+- `FPDF_StructElement_GetChildAtIndex` returns `NULL` for a struct-tree child that is a content reference rather than an element. PDFium's header documents this.
+- `FPDF_StructTree_GetChildAtIndex` does the same for a top-level element belonging to a **different page**: the count is document-wide while [`getStructTree()`](#getstructtree) walks a single page, so a document with one `/Part` per chapter yields a `NULL` for every chapter that is not the current one. PDFium's header does not mention this; it was established by measurement.
+- [`getNamedDestinations()`](#getnameddestinations) omits a destination it cannot resolve. `FPDF_GetNamedDest` resolves indices below the `/Names /Dests` name-tree count through the tree, which dereferences indirect objects, and lets the rest fall through to the legacy catalog `/Dests` dictionary, which does not — while `FPDF_CountNamedDests` counts every legacy key regardless. A legal entry whose value is an indirect reference is therefore counted and then not resolved, so reporting these would flag healthy documents. PDFium exposes no way to ask for the name-tree count alone, so the two cases cannot be told apart.
+
+The widget-subtype filter in [`getFormFields()`](#getformfields) is a different thing again: it skips an annotation whose handle loaded _successfully_ and turned out not to be a form field, so no `NULL` is involved.
+
+### Where a `null` is not reported
+
+A `null` only appears once PDFium has counted the entry, which means damage severe enough to break the count is still invisible. For attachments, a `/EmbeddedFiles` name tree that fails to parse at all — an odd-length `/Names` array, or an `/EmbeddedFiles` key whose reference dangles — reports `attachmentCount: 0` and an empty array, which is indistinguishable from a document with no embedded files. `CPDF_NameTree::Create` fails and `FPDFDoc_GetAttachmentCount` has no error return, so this binding cannot currently see the difference.
+
+For the page-level listings the trigger is narrower than "damage": `FPDFPage_GetAnnot` also returns `NULL` for an explicit PDF null object left in an `/Annots` array, which is syntactically legal and something some producers emit after deleting an annotation. A `null` from [`getAnnotations()`](#getannotations) or [`getFormFields()`](#getformfields) means the slot did not resolve to an annotation dictionary — not necessarily that the file is corrupt.
 
 ### `loadDocument(input, password?)`
 
@@ -351,7 +390,7 @@ interface Bookmark {
 
 #### `getAttachments()`
 
-Lists every embedded file (attachment) in the document's `/EmbeddedFiles` name tree. Returns `Promise<Attachment[]>`. This reads only dictionary metadata — it does **not** decode the file streams; use [`getAttachment(index)`](#getattachmentindex-options) to read the bytes.
+Lists every embedded file (attachment) in the document's `/EmbeddedFiles` name tree. Returns `Promise<(Attachment | null)[]>` — one entry per `metadata.attachmentCount`, `null` where the embedded file could not be loaded (see [Unloadable entries](#unloadable-entries)). This reads only dictionary metadata — it does **not** decode the file streams; use [`getAttachment(index)`](#getattachmentindex-options) to read the bytes.
 
 ```typescript
 interface Attachment {
@@ -377,7 +416,7 @@ const E_INVOICE_NAMES = ['factur-x.xml', 'zugferd-invoice.xml', 'xrechnung.xml']
 
 const doc = await loadDocument('invoice.pdf');
 const attachments = await doc.getAttachments();
-const entry = attachments.find((a) => E_INVOICE_NAMES.includes(a.name.toLowerCase()));
+const entry = attachments.find((a) => a && E_INVOICE_NAMES.includes(a.name.toLowerCase()));
 
 if (entry) {
   const xml = await doc.getAttachment(entry.index); // Buffer of the exact embedded bytes
@@ -394,7 +433,7 @@ Rejects if `index` is out of range (`0 … attachmentCount - 1`). `metadata.atta
 
 #### `getSignatures()`
 
-Lists every digital signature in the document. Returns `Promise<Signature[]>`.
+Lists every digital signature in the document. Returns `Promise<(Signature | null)[]>` — one entry per `metadata.signatureCount`, `null` where the signature could not be loaded (see [Unloadable entries](#unloadable-entries)). A `null` is not "unsigned": it is a signature this library could not read.
 
 Nothing here is cryptographically verified — PDFium does not do that. These values are what the signature dictionary _declares_, so a well-formed entry proves only that the document claims to be signed.
 
@@ -414,6 +453,7 @@ interface Signature {
 const doc = await loadDocument('contract.pdf');
 
 for (const sig of await doc.getSignatures()) {
+  if (!sig) continue; // counted but unloadable — see Unloadable entries
   // A signature covers the whole file only if its last range ends at the file
   // size. Anything less means content was appended after signing.
   const end = sig.byteRange.at(-2)! + sig.byteRange.at(-1)!;
@@ -431,7 +471,7 @@ Pass this, together with the `byteRange` from `getSignatures()`, to a crypto lib
 
 #### `getJavaScriptActions()`
 
-Lists the document-level scripts a viewer runs when the document opens. Returns `Promise<JavaScriptAction[]>`.
+Lists the document-level scripts a viewer runs when the document opens. Returns `Promise<(JavaScriptAction | null)[]>` — `null` where an action could not be loaded (see [Unloadable entries](#unloadable-entries)). For triage that matters: a document-open script that cannot be read is not the same as no script.
 
 Nothing is executed — the bundled PDFium is built with V8 disabled, so scripts come back as inert text. This is for inspection and triage.
 
@@ -449,11 +489,14 @@ const scripts = await doc.getJavaScriptActions();
 if (scripts.length > 0) {
   console.warn(`${scripts.length} document-open script(s) — review before rendering`);
 }
+// an action PDFium could not read is the one most worth looking at by hand
+const unreadable = scripts.filter((s) => s === null).length;
+if (unreadable > 0) console.warn(`${unreadable} script(s) could not be decoded`);
 ```
 
 #### `getNamedDestinations()`
 
-Lists the document's named destinations — the anchors that GoTo actions and external links target by name rather than by page number. Returns `Promise<NamedDestination[]>`.
+Lists the document's named destinations — the anchors that GoTo actions and external links target by name rather than by page number. Returns `Promise<NamedDestination[]>`. A destination PDFium cannot resolve is omitted rather than reported as `null`; see [Unloadable entries](#unloadable-entries) for why this one listing is different.
 
 Both storage forms are read: the modern `/Names /Dests` name tree and the legacy `/Dests` catalog dictionary.
 
@@ -676,7 +719,7 @@ const matches = await page.search('invoice', {
 
 #### `getAnnotations()`
 
-Returns all annotations on the page. Returns `Promise<Annotation[]>`.
+Returns all annotations on the page. Returns `Promise<(Annotation | null)[]>` — one entry per annotation the page declares, `null` where it could not be loaded (see [Unloadable entries](#unloadable-entries)). Array position matches `index`.
 
 ```typescript
 interface Annotation {
@@ -708,7 +751,7 @@ Rejects if the annotation at `index` is not a file attachment or carries no embe
 ```typescript
 const annotations = await page.getAnnotations();
 for (const annot of annotations) {
-  if (annot.type === 'fileattachment') {
+  if (annot?.type === 'fileattachment') {
     const bytes = await page.getAnnotationAttachment(annot.index); // Buffer of exact embedded bytes
     // ...or write straight to disk:
     await page.getAnnotationAttachment(annot.index, { output: annot.fileName ?? 'attachment.bin' });
@@ -718,7 +761,7 @@ for (const annot of annotations) {
 
 #### `getFormFields()`
 
-Returns all form fields on the page. Returns `Promise<FormField[]>`.
+Returns all form fields on the page. Returns `Promise<(FormField | null)[]>`. Unlike the other listings this array is a filtered subset — only widget annotations are form fields — so its length tracks no count, and array position is not a page index. A `null` means an annotation on the page could not be loaded; because the subtype is only readable through the handle that failed, it cannot be ruled out as a non-widget, so it means "a form field may be missing here" (see [Unloadable entries](#unloadable-entries)).
 
 ```typescript
 interface FormField {
@@ -749,8 +792,8 @@ interface FormFieldOption {
 
 ```typescript
 const fields = await page.getFormFields();
-const textFields = fields.filter((f) => f.type === 'textField');
-const checked = fields.filter((f) => f.isChecked);
+const textFields = fields.filter((f) => f?.type === 'textField');
+const checked = fields.filter((f) => f?.isChecked);
 ```
 
 #### `close()`
