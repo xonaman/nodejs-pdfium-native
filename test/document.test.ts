@@ -98,6 +98,8 @@ describe('PDFiumDocument.getMetadata', () => {
     expect(meta.signatureCount).toBeGreaterThanOrEqual(0);
     expect(typeof meta.attachmentCount).toBe('number');
     expect(meta.attachmentCount).toBeGreaterThanOrEqual(0);
+    expect(typeof meta.namedDestinationCount).toBe('number');
+    expect(meta.namedDestinationCount).toBe(0);
     doc.destroy();
   });
 

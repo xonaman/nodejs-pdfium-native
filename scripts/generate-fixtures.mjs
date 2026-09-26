@@ -885,6 +885,64 @@ async function createNavigationPdf() {
   return doc.save();
 }
 
+// --- PDF whose legacy /Dests values are indirect references ---
+// FPDF_CountNamedDests counts every key in the catalog's legacy /Dests
+// dictionary, but FPDF_GetNamedDest resolves those keys without dereferencing
+// an indirect value, so it returns neither a destination nor a name for them.
+// The three legacy entries here are therefore counted and unlistable, while
+// the single name-tree entry lists normally — the mismatch between
+// metadata.namedDestinationCount (4) and getNamedDestinations().length (1) is
+// what the fixture exists to pin. Nothing about this document is malformed:
+// ISO 32000-1 allows an indirect reference wherever a direct object is
+// allowed, and FPDF_GetNamedDestByName resolves all four names.
+async function createIndirectLegacyDestsPdf() {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const pages = [];
+  for (let i = 1; i <= 3; i++) {
+    const page = doc.addPage([300, 400]);
+    page.drawText(`Section ${i}`, { x: 50, y: 300, size: 20, font });
+    pages.push(page);
+  }
+
+  const { PDFName, PDFString } = await import('pdf-lib');
+
+  // one modern name-tree entry, written inline so it resolves by index
+  const destsTree = doc.context.obj({
+    Names: [PDFString.of('Tree'), [pages[0].ref, 'XYZ', 50, 700, 2]],
+  });
+  doc.catalog.set(PDFName.of('Names'), doc.context.obj({ Dests: destsTree }));
+
+  // legacy /Dests, every value an indirect reference. The dictionary itself is
+  // indirect either way, so the indirection of the values is the only variable.
+  const ref = (arr) => doc.context.register(doc.context.obj(arr));
+  const legacy = doc.context.register(
+    doc.context.obj({
+      Alpha: ref([pages[0].ref, PDFName.of('XYZ'), 50, 700, 0]),
+      Beta: ref([pages[1].ref, PDFName.of('Fit')]),
+      Gamma: ref([pages[2].ref, PDFName.of('FitH'), 500]),
+    }),
+  );
+  doc.catalog.set(PDFName.of('Dests'), legacy);
+
+  // link annotations targeting those same names by the legacy /Dest spelling,
+  // so the document reads as one a viewer would actually navigate
+  const annots = ['Alpha', 'Beta', 'Gamma'].map((name, i) =>
+    doc.context.register(
+      doc.context.obj({
+        Type: 'Annot',
+        Subtype: 'Link',
+        Rect: [50, 200 - i * 40, 200, 230 - i * 40],
+        Border: [0, 0, 0],
+        Dest: PDFName.of(name),
+      }),
+    ),
+  );
+  pages[0].node.set(PDFName.of('Annots'), doc.context.obj(annots));
+
+  return doc.save({ useObjectStreams: false });
+}
+
 // --- Four-page PDF whose pages identify themselves ---
 // Each page carries its own number as text, so assembly tests can verify
 // order, selection and duplication by reading the pages back.
@@ -1148,6 +1206,7 @@ const fixtures = [
   ['positioned-text.pdf', createPositionedTextPdf],
   ['four-page.pdf', createFourPagePdf],
   ['navigation.pdf', createNavigationPdf],
+  ['indirect-legacy-dests.pdf', createIndirectLegacyDestsPdf],
   ['struct-tree.pdf', createStructTreePdf],
   ['astral-text.pdf', createAstralTextPdf],
   ['struct-tree-bomb.pdf', createStructTreeBombPdf],

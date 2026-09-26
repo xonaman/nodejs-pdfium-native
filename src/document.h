@@ -34,6 +34,8 @@ public:
                 "getJavaScriptActions"),
             InstanceMethod<&PDFiumDocument::GetNamedDestinations>(
                 "getNamedDestinations"),
+            InstanceMethod<&PDFiumDocument::GetNamedDestination>(
+                "getNamedDestination"),
             InstanceMethod<&PDFiumDocument::Destroy>("destroy"),
         });
   }
@@ -211,6 +213,31 @@ private:
       return env.Null();
 
     auto *worker = new GetNamedDestinationsWorker(env, doc_, docAlive_);
+    auto promise = worker->Promise();
+    worker->Queue();
+    return promise;
+  }
+
+  /**
+   * Resolves a single named destination by name (async). Resolves to null when
+   * no destination carries the name. Reaches destinations the index-based
+   * listing cannot enumerate — see the note in destinations_worker.h.
+   */
+  Napi::Value GetNamedDestination(const Napi::CallbackInfo &info) {
+    Napi::Env env = info.Env();
+    EnsureOpen(env);
+    if (env.IsExceptionPending())
+      return env.Null();
+
+    if (info.Length() < 1 || !info[0].IsString()) {
+      Napi::TypeError::New(env, "Expected destination name")
+          .ThrowAsJavaScriptException();
+      return env.Null();
+    }
+
+    Napi::String name = info[0].As<Napi::String>();
+    auto *worker = new GetNamedDestinationWorker(
+        env, doc_, name.Utf8Value(), name.Utf16Value(), docAlive_);
     auto promise = worker->Promise();
     worker->Queue();
     return promise;
