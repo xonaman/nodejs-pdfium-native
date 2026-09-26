@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { loadDocument } from '../lib/index.js';
+import { allLoaded } from './helpers.js';
 
 const fixture = (name: string) => resolve(import.meta.dirname!, 'fixtures', name);
 
@@ -22,7 +23,7 @@ describe('PDFiumPage.getAnnotations (file attachments)', () => {
     const doc = await loadDocument(fixture('file-attachment-annotation.pdf'));
     const page = await doc.getPage(0);
 
-    const annotations = await page.getAnnotations();
+    const annotations = allLoaded(await page.getAnnotations());
     expect(annotations).toHaveLength(2);
 
     // fixture lays out [Text, FileAttachment], so indices are 0 and 1
@@ -44,7 +45,7 @@ describe('PDFiumPage.getAnnotationAttachment', () => {
   const openFileAnnot = async () => {
     const doc = await loadDocument(fixture('file-attachment-annotation.pdf'));
     const page = await doc.getPage(0);
-    const annotations = await page.getAnnotations();
+    const annotations = allLoaded(await page.getAnnotations());
     const file = annotations.find((a) => a.type === 'fileattachment');
     if (!file) throw new Error('file-attachment annotation not found');
     return { doc, page, index: file.index };

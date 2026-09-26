@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { addAttachments, loadDocument } from '../lib/index.js';
+import { allLoaded, onlyLoaded } from './helpers.js';
 
 const fixture = (name: string) => resolve(import.meta.dirname!, 'fixtures', name);
 
@@ -21,7 +22,7 @@ describe('addAttachments', () => {
     const doc = await loadDocument(pdf);
     expect(doc.metadata.attachmentCount).toBe(1);
 
-    const [entry] = await doc.getAttachments();
+    const entry = onlyLoaded(await doc.getAttachments());
     expect(entry.name).toBe('data.xml');
 
     const bytes = await doc.getAttachment(entry.index);
@@ -37,7 +38,7 @@ describe('addAttachments', () => {
     ]);
 
     const doc = await loadDocument(pdf);
-    const attachments = await doc.getAttachments();
+    const attachments = allLoaded(await doc.getAttachments());
     expect(attachments.map((a) => a.name).sort()).toEqual(['a.txt', 'b.txt']);
 
     const byName = async (name: string) => {
@@ -58,7 +59,7 @@ describe('addAttachments', () => {
 
     const doc = await loadDocument(pdf);
     expect(doc.metadata.attachmentCount).toBe(3);
-    const names = (await doc.getAttachments()).map((a) => a.name);
+    const names = allLoaded(await doc.getAttachments()).map((a) => a.name);
     expect(names).toContain('factur-x.xml');
     expect(names).toContain('extra.txt');
     doc.destroy();
@@ -75,7 +76,7 @@ describe('addAttachments', () => {
     ]);
 
     const doc = await loadDocument(pdf);
-    const [entry] = await doc.getAttachments();
+    const entry = onlyLoaded(await doc.getAttachments());
     expect(entry.creationDate).toBe('D:20250101120000Z');
     expect(entry.modDate).toBe('D:20250202130000Z');
     doc.destroy();
@@ -87,7 +88,7 @@ describe('addAttachments', () => {
     ]);
 
     const doc = await loadDocument(pdf);
-    const [entry] = await doc.getAttachments();
+    const entry = onlyLoaded(await doc.getAttachments());
     // PDFium writes "D:YYYYMMDDHHMMSS" without a timezone
     expect(entry.creationDate).toMatch(/^D:\d{14}$/);
     doc.destroy();
@@ -115,7 +116,7 @@ describe('addAttachments', () => {
     expect(result).toBeUndefined();
 
     const doc = await loadDocument(readFileSync(out));
-    const [entry] = await doc.getAttachments();
+    const entry = onlyLoaded(await doc.getAttachments());
     expect((await doc.getAttachment(entry.index)).equals(XML)).toBe(true);
     doc.destroy();
   });
@@ -133,7 +134,7 @@ describe('addAttachments', () => {
     ]);
 
     const doc = await loadDocument(pdf);
-    const [entry] = await doc.getAttachments();
+    const entry = onlyLoaded(await doc.getAttachments());
     const bytes = await doc.getAttachment(entry.index);
     expect(bytes.toString('hex')).toBe('789c030000000001');
     doc.destroy();
@@ -174,7 +175,7 @@ describe('addAttachments', () => {
     const pdf = await addAttachments(fixture('minimal.pdf'), [{ name: 'factur-x.xml', data: XML }]);
 
     const doc = await loadDocument(pdf);
-    const [entry] = await doc.getAttachments();
+    const entry = onlyLoaded(await doc.getAttachments());
     expect(entry.mimeType).toBe('');
     doc.destroy();
   });

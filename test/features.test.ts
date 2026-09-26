@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { loadDocument } from '../lib/index.js';
+import { allLoaded } from './helpers.js';
 
 const fixture = (name: string) => resolve(import.meta.dirname!, 'fixtures', name);
 
@@ -53,7 +54,7 @@ describe('PDFiumPage.getAnnotations', () => {
   it('returns annotations with types, bounds, and contents', async () => {
     const doc = await loadDocument(fixture('annotations.pdf'));
     const page = await doc.getPage(0);
-    const annotations = await page.getAnnotations();
+    const annotations = allLoaded(await page.getAnnotations());
     expect(annotations.length).toBe(2);
 
     // text annotation (sticky note)
@@ -106,7 +107,7 @@ describe('PDFiumPage.getAnnotations', () => {
   it('returns border and interior color for square/circle annotations', async () => {
     const doc = await loadDocument(fixture('border-annotations.pdf'));
     const page = await doc.getPage(0);
-    const annotations = await page.getAnnotations();
+    const annotations = allLoaded(await page.getAnnotations());
     expect(annotations.length).toBe(2);
 
     // square annotation with border and interior color

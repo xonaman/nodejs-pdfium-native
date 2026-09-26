@@ -7,7 +7,7 @@ const fixture = (name: string) => resolve(import.meta.dirname!, 'fixtures', name
 
 describe('splitDocument', () => {
   it('splits a two-page PDF into two single-page documents', async () => {
-    const [part1, part2] = (await splitDocument(fixture('two-page.pdf'), [1])) as Buffer[];
+    const [part1, part2] = (await splitDocument(fixture('two-page.pdf'), [1])) as [Buffer, Buffer];
     const doc1 = await loadDocument(part1);
     const doc2 = await loadDocument(part2);
     expect(doc1.pageCount).toBe(1);
@@ -19,14 +19,14 @@ describe('splitDocument', () => {
   it('returns a single document when splitAt is empty', async () => {
     const result = (await splitDocument(fixture('two-page.pdf'), [])) as Buffer[];
     expect(result).toHaveLength(1);
-    const doc = await loadDocument(result[0]);
+    const doc = await loadDocument(result[0]!);
     expect(doc.pageCount).toBe(2);
     doc.destroy();
   });
 
   it('works with a Buffer input', async () => {
     const buf = readFileSync(fixture('two-page.pdf'));
-    const [part1, part2] = (await splitDocument(buf, [1])) as Buffer[];
+    const [part1, part2] = (await splitDocument(buf, [1])) as [Buffer, Buffer];
     expect(part1).toBeInstanceOf(Buffer);
     expect(part2).toBeInstanceOf(Buffer);
     const doc1 = await loadDocument(part1);
