@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { loadDocument } from '../lib/index.js';
+import { allLoaded, loadedAt } from './helpers.js';
 
 const fixture = (name: string) => resolve(import.meta.dirname!, 'fixtures', name);
 
@@ -40,11 +41,12 @@ describe('PDFiumDocument.getSignatures', () => {
     const doc = await loadDocument(fixture('signed.pdf'));
     expect(doc.metadata.signatureCount).toBe(2);
 
-    const signatures = await doc.getSignatures();
+    const signatures = allLoaded(await doc.getSignatures());
     expect(signatures).toHaveLength(2);
     expect(signatures.map((s) => s.index)).toEqual([0, 1]);
 
-    const [approval, certification] = signatures;
+    const approval = loadedAt(signatures, 0);
+    const certification = loadedAt(signatures, 1);
 
     expect(approval.subFilter).toBe('adbe.pkcs7.detached');
     expect(approval.reason).toBe('I approve this document');
@@ -60,7 +62,9 @@ describe('PDFiumDocument.getSignatures', () => {
 
   it('reports docMdpPermission only for the certification signature', async () => {
     const doc = await loadDocument(fixture('signed.pdf'));
-    const [approval, certification] = await doc.getSignatures();
+    const signatures = await doc.getSignatures();
+    const approval = loadedAt(signatures, 0);
+    const certification = loadedAt(signatures, 1);
 
     // an ordinary approval signature has no /Reference -> /DocMDP entry
     expect(approval.docMdpPermission).toBeUndefined();
@@ -71,7 +75,9 @@ describe('PDFiumDocument.getSignatures', () => {
 
   it('returns the byte range as the flat (offset, length) pairs from the PDF', async () => {
     const doc = await loadDocument(fixture('signed.pdf'));
-    const [approval, certification] = await doc.getSignatures();
+    const signatures = await doc.getSignatures();
+    const approval = loadedAt(signatures, 0);
+    const certification = loadedAt(signatures, 1);
 
     expect(approval.byteRange).toEqual([0, 840, 1560, 1234]);
     expect(certification.byteRange).toEqual([0, 200, 900, 300]);
@@ -81,7 +87,9 @@ describe('PDFiumDocument.getSignatures', () => {
 
   it('reports the /Contents length without reading the blob', async () => {
     const doc = await loadDocument(fixture('signed.pdf'));
-    const [approval, certification] = await doc.getSignatures();
+    const signatures = await doc.getSignatures();
+    const approval = loadedAt(signatures, 0);
+    const certification = loadedAt(signatures, 1);
 
     expect(approval.contentsLength).toBe(SIG_CONTENTS.length);
     expect(certification.contentsLength).toBe(CERT_SIG_CONTENTS.length);

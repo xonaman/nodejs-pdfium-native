@@ -78,7 +78,7 @@
     "verify:checksums": "node scripts/verify-checksums.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
     "lint": "eslint --fix .",
     "lint:check": "eslint .",
     "format": "prettier --write .",

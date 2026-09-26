@@ -114,8 +114,8 @@ describe('PDFiumPage.getCharacters', () => {
       }
 
       // synthesized characters carry no real font
-      expect(generated[0].fontName).toBe('');
-      expect(generated[0].fontWeight).toBeUndefined();
+      expect(generated[0]!.fontName).toBe('');
+      expect(generated[0]!.fontWeight).toBeUndefined();
     });
   });
 
@@ -230,11 +230,11 @@ describe('PDFiumPage.getCharacters with non-BMP text', () => {
 
       // Regression: each lone surrogate used to be converted separately and
       // V8 replaced it with U+FFFD, corrupting every non-BMP character.
-      expect(chars[0].char).toBe('\u{1F600}');
-      expect(chars[0].char).not.toContain('�');
+      expect(chars[0]!.char).toBe('\u{1F600}');
+      expect(chars[0]!.char).not.toContain('�');
       // the second half is an empty continuation entry
-      expect(chars[1].char).toBe('');
-      expect(chars[2].char).toBe('é');
+      expect(chars[1]!.char).toBe('');
+      expect(chars[2]!.char).toBe('é');
     });
   });
 

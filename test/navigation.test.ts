@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { loadDocument } from '../lib/index.js';
+import { allLoaded } from './helpers.js';
 
 const fixture = (name: string) => resolve(import.meta.dirname!, 'fixtures', name);
 
@@ -17,7 +18,7 @@ describe('PDFiumDocument.getJavaScriptActions', () => {
 
   it('lists each action with its name and script', async () => {
     const doc = await loadDocument(fixture('navigation.pdf'));
-    const actions = await doc.getJavaScriptActions();
+    const actions = allLoaded(await doc.getJavaScriptActions());
 
     expect(actions).toHaveLength(2);
     expect(actions.map((a) => a.index)).toEqual([0, 1]);

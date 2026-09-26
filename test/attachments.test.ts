@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { addAttachments, loadDocument } from '../lib/index.js';
+import { allLoaded } from './helpers.js';
 
 const fixture = (name: string) => resolve(import.meta.dirname!, 'fixtures', name);
 
@@ -32,10 +33,10 @@ afterAll(async () => {
 });
 
 // factur-x.xml / notes.txt embedded by scripts/generate-fixtures.mjs
-const findByName = (list: ({ name: string } | null)[], name: string) => {
+const findByName = <T extends { name: string }>(list: readonly (T | null)[], name: string): T => {
   const found = list.find((a) => a?.name === name);
   if (!found) throw new Error(`attachment ${name} not found`);
-  return found as never;
+  return found;
 };
 
 describe('PDFiumDocument.getAttachments', () => {
@@ -52,7 +53,7 @@ describe('PDFiumDocument.getAttachments', () => {
     const doc = await loadDocument(fixture('einvoice-zugferd.pdf'));
     expect(doc.metadata.attachmentCount).toBe(2);
 
-    const attachments = await doc.getAttachments();
+    const attachments = allLoaded(await doc.getAttachments());
     expect(attachments).toHaveLength(2);
 
     // indices are stable and unique
