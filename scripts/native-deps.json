@@ -1,49 +1,49 @@
 {
   "pdfium": {
-    "version": "chromium/8066",
+    "version": "chromium/8111",
     "origin": "https://github.com",
     "baseUrl": "https://github.com/bblanchon/pdfium-binaries/releases/download",
     "checksumSource": "Sigstore SLSA provenance attestation (pdfium-attestation.json) attached to the bblanchon/pdfium-binaries release",
     "targets": {
       "darwin-arm64": {
         "asset": "pdfium-mac-arm64.tgz",
-        "sha256": "336219e80580b93c6523f44db7dc1de59cc497b13a7390ddac84223f68ca162b"
+        "sha256": "46c674298c60123f1195c2a03c65ee08c4783c84874ce4f5b3a054abb3ecaf30"
       },
       "darwin-x64": {
         "asset": "pdfium-mac-x64.tgz",
-        "sha256": "841ecac278cdd46288dd065873522cf72f3996560d8978f473d336f01d59942c"
+        "sha256": "e7fece4693f65a7e47f84fa38099068d573d4dcbd46b1a3c8d2c26581c308466"
       },
       "linux-x64": {
         "asset": "pdfium-linux-x64.tgz",
-        "sha256": "0b43f405477cf2cfc4dbff06905093c3309756c6bca1fb9da99234a2ca97fed2"
+        "sha256": "bdc60126399f39fe768566a18d4be055a7b3681bc9e248e8a6656b4f6cae0aa2"
       },
       "linux-arm64": {
         "asset": "pdfium-linux-arm64.tgz",
-        "sha256": "0e6f90dccbc6b81fd5d7106abaf164c4222178f024c204d00d526b60fd2ad535"
+        "sha256": "042de247138f96341534cccf24ed21c2550a7245b936bb4a60d2340120000f05"
       },
       "linux-arm": {
         "asset": "pdfium-linux-arm.tgz",
-        "sha256": "3253c2bc3d0164482825e96f7abf03a201ac03ef6993250938301a0d04e3a610"
+        "sha256": "1991ee14427210aeea98e0c91f35582768605a0a16e43a20f65d776af54067f0"
       },
       "linux-ppc64": {
         "asset": "pdfium-linux-ppc64.tgz",
-        "sha256": "4cdb99207f02ad46676486c6cbbb56f2d2bb8822f9f570ef044e464d2a8e70e5"
+        "sha256": "00ffdeba67e2b6c6769fbb3cc9ac40a0c624697c3459b2151577b3e06721da31"
       },
       "linux-musl-x64": {
         "asset": "pdfium-linux-musl-x64.tgz",
-        "sha256": "3eb7427ed0a9498260f94a548e2a647f604932050dacaf1707be342602613bec"
+        "sha256": "abed371eee40c1ce2cc44adca4388a0fc80b6e133f0c5128ce65504c06835313"
       },
       "linux-musl-arm64": {
         "asset": "pdfium-linux-musl-arm64.tgz",
-        "sha256": "12b963674d596b8f8ecd145a7d68613e6347a87e3888f520c8d42446241d50c6"
+        "sha256": "c6cc502621bfbea46e25a59e88bbb2b1a6019d89d558dc4438d8eb8ed50d2a84"
       },
       "win32-x64": {
         "asset": "pdfium-win-x64.tgz",
-        "sha256": "739a57d597d864297909cc40a2411eba728490c76a0fa25e3ea299c7f6b07020"
+        "sha256": "3452d11031050ec65e57f180215b57b9e6d465e3fbedafa8a77ad90885c7d23e"
       },
       "win32-arm64": {
         "asset": "pdfium-win-arm64.tgz",
-        "sha256": "5d04b6d0281e78613ef836dea2e0fefe6831f3ae92b3573e8fdf55330de67d3d"
+        "sha256": "99ec8b76d5ac30602a8488da745397393ff6cddc824ef36f398146f6b4f76d4e"
       }
     }
   }
