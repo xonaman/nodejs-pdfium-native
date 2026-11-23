@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-23
+
 ### Added
 
 - `objects` on a form page object: the page objects a form XObject draws, in drawing order, nested forms with their own `objects` and bounds mapped to page coordinates through every form matrix (`FPDFFormObj_CountObjects` / `FPDFFormObj_GetObject` / `FPDFPageObj_GetMatrix`). PDFium lists only the form itself on the page, so for a producer that draws the whole page inside one form — some retailers' e-receipts do — `objects()` showed a single opaque box while `getText()` returned all of its text, and nothing could tell its text objects, their render modes or the images beside them from a scanned picture wrapped the same way. An image inside a form carries no `render()`, since `renderImage()` addresses page-level objects by index. The walk is bounded at 32 levels of nested forms and 20,000 objects per call, and sets `objectsTruncated: true` where it stops, so a crafted file cannot make it allocate without limit while it holds the global PDFium mutex. Pinned by new `form-xobjects.pdf` and `form-depth-bomb.pdf` fixtures. `OtherPageObject` no longer includes `'form'`; form objects are the new `FormPageObject`, and `NestedPageObject` types what `objects` holds.
@@ -375,7 +377,8 @@ now pinned by a regression test.
 - GitHub Actions publish workflow with test gate
 - TypeScript type declarations for JS consumers
 
-[Unreleased]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/xonaman/nodejs-pdfium-native/compare/v0.8.0...v0.9.0
