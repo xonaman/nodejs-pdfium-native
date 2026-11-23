@@ -220,8 +220,7 @@ private:
 
   /**
    * Resolves a single named destination by name (async). Resolves to null when
-   * no destination carries the name. Reaches destinations the index-based
-   * listing cannot enumerate — see the note in destinations_worker.h.
+   * no destination carries the name — see the note in destinations_worker.h.
    */
   Napi::Value GetNamedDestination(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();

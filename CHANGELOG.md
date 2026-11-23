@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Changed
+
+- Bundled PDFium bumped from `chromium/8066` to `chromium/8179`.
+
+### Fixed
+
+- `getNamedDestinations()` now lists legacy catalog `/Dests` entries whose value is an indirect reference. `FPDF_GetNamedDest` used the raw value on its legacy path, so such a legal entry was counted by `metadata.namedDestinationCount` and then yielded neither a destination nor a name; a document with `indirect-legacy-dests.pdf`'s shape listed one of its four anchors. The fix landed upstream in PDFium ([CL 159090](https://pdfium-review.googlesource.com/c/pdfium/+/159090), first shipped in `chromium/8100`) and arrives here with the PDFium bump. The listing can still come back shorter than the count, but now only for entries PDFium cannot resolve at all — a dangling reference, or a value that is not a destination — which `getNamedDestination(name)` cannot resolve either.
+
 ## [0.11.0] - 2026-11-23
 
 ### Added

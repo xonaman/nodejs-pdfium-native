@@ -91,10 +91,10 @@ protected:
     signatureCount_ = FPDF_GetSignatureCount(doc_);
     attachmentCount_ = FPDFDoc_GetAttachmentCount(doc_);
     // Read here rather than left to getNamedDestinations(), because that
-    // listing is the one that can come back shorter than its own count: a
-    // legacy /Dests entry whose value is an indirect reference is counted and
-    // then cannot be resolved or even named through the index API. Exposing
-    // the count is what makes that gap visible to a caller.
+    // listing is the one that can come back shorter than its own count: an
+    // entry PDFium counts but cannot resolve (a dangling reference, say)
+    // cannot even be named through the index API. Exposing the count is what
+    // makes that gap visible to a caller.
     namedDestinationCount_ =
         static_cast<double>(FPDF_CountNamedDests(doc_));
 
