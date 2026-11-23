@@ -530,10 +530,10 @@ export interface DocumentMetadata {
    * `/Names /Dests` name tree plus the legacy catalog `/Dests` dictionary.
    *
    * `getNamedDestinations()` can return fewer entries than this: an entry
-   * whose value is an indirect reference is counted but cannot be resolved or
-   * named through PDFium's index-based lookup. A mismatch means destinations
-   * exist that the listing could not enumerate; `getNamedDestination(name)`
-   * still resolves them.
+   * PDFium counts but cannot resolve — a dangling reference, or a value that
+   * is not a destination — cannot be named through PDFium's index-based
+   * lookup either, so it is left out. A mismatch therefore means damaged
+   * entries; `getNamedDestination(name)` does not resolve them either.
    */
   namedDestinationCount: number;
   /** Permanent file identifier (hex string). */

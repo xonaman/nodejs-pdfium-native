@@ -175,15 +175,12 @@ export class PDFiumDocument {
    * walking every link on every page.
    *
    * **This is the one listing in the library that can come back shorter than
-   * its own count.** A legal legacy `/Dests` entry whose value is an indirect
-   * reference is counted by PDFium and then resolved by neither of the two
-   * things the index-based lookup could return: it yields no destination and
-   * writes no name, so the entry cannot be reported even as a `null` the way
-   * the other counted listings report theirs. Compare the length against
-   * `metadata.namedDestinationCount` to detect the gap, and use
-   * {@link getNamedDestination} to resolve such a destination by name — that
-   * path goes through PDFium's own name lookup, which dereferences the value
-   * and finds it.
+   * its own count.** An entry PDFium counts but cannot resolve — a dangling
+   * reference, or a value that is not a destination — yields no destination
+   * and writes no name, so it cannot be reported even as a `null` the way the
+   * other counted listings report theirs. Compare the length against
+   * `metadata.namedDestinationCount` to detect such damage;
+   * {@link getNamedDestination} cannot resolve these entries either.
    */
   getNamedDestinations(): Promise<NamedDestination[]> {
     return withConcurrency(() => this.native.getNamedDestinations());
@@ -196,8 +193,7 @@ export class PDFiumDocument {
    * Prefer this over scanning {@link getNamedDestinations} when a name is
    * already in hand — following `#Chapter2` from an incoming link, say. It
    * searches the `/Names /Dests` name tree and the legacy catalog `/Dests`
-   * dictionary alike and dereferences an indirect value in either, so it
-   * reaches destinations the listing cannot enumerate.
+   * dictionary alike and dereferences an indirect value in either.
    *
    * The name is matched as bytes, against the raw name-tree key. Names are
    * ASCII in practice; one stored in UTF-16BE or PDFDocEncoding will not be

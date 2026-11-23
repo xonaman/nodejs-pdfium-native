@@ -146,7 +146,7 @@ Three neighbouring cases are deliberately **not** reported this way, because in 
 
 - `FPDF_StructElement_GetChildAtIndex` returns `NULL` for a struct-tree child that is a content reference rather than an element. PDFium's header documents this.
 - `FPDF_StructTree_GetChildAtIndex` does the same for a top-level element belonging to a **different page**: the count is document-wide while [`getStructTree()`](#getstructtree) walks a single page, so a document with one `/Part` per chapter yields a `NULL` for every chapter that is not the current one. PDFium's header does not mention this; it was established by measurement.
-- [`getNamedDestinations()`](#getnameddestinations) omits a destination it cannot resolve. `FPDF_GetNamedDest` resolves indices below the `/Names /Dests` name-tree count through the tree, which dereferences indirect objects, and lets the rest fall through to the legacy catalog `/Dests` dictionary, which does not — while `FPDF_CountNamedDests` counts every legacy key regardless. A legal entry whose value is an indirect reference is therefore counted and then not resolved, so reporting these as `null` would flag healthy documents. It could not be done in any case: when the lookup fails PDFium writes no name into the buffer either, so the index yields nothing at all to report an entry under. This is the one listing in the library that can come back shorter than its own count — compare against `metadata.namedDestinationCount` to see the gap, and use [`getNamedDestination(name)`](#getnameddestinationname) to resolve such a destination, which goes through PDFium's own name lookup and does dereference.
+- [`getNamedDestinations()`](#getnameddestinations) omits a destination it cannot resolve. When `FPDF_GetNamedDest` fails for an entry that `FPDF_CountNamedDests` counted — a dangling reference, or a value that is not a destination — PDFium writes no name into the buffer either, so the index yields nothing at all to report an entry under. This is the one listing in the library that can come back shorter than its own count — compare against `metadata.namedDestinationCount` to see the gap. [`getNamedDestination(name)`](#getnameddestinationname) cannot resolve such an entry either. Up to PDFium `chromium/8100` a legal legacy `/Dests` entry whose value is an indirect reference was dropped the same way, because the legacy lookup did not dereference; that was fixed upstream, and those entries now list normally.
 
 The widget-subtype filter in [`getFormFields()`](#getformfields) is a different thing again: it skips an annotation whose handle loaded _successfully_ and turned out not to be a form field, so no `NULL` is involved.
 
@@ -500,7 +500,7 @@ Lists the document's named destinations — the anchors that GoTo actions and ex
 
 Both storage forms are read: the modern `/Names /Dests` name tree and the legacy `/Dests` catalog dictionary.
 
-**This is the only listing here that can come back shorter than its count.** A legal legacy `/Dests` entry whose value is an indirect reference is counted by `FPDF_CountNamedDests` and then resolved by neither half of `FPDF_GetNamedDest`: no destination, and no name written to the buffer — so it cannot be reported even as a `null` the way the other counted listings report theirs. Compare the length against `metadata.namedDestinationCount` to detect the gap, and reach the missing entries with [`getNamedDestination(name)`](#getnameddestinationname). See [Unloadable entries](#unloadable-entries) for why this one is different.
+**This is the only listing here that can come back shorter than its count.** An entry `FPDF_CountNamedDests` counts but `FPDF_GetNamedDest` cannot resolve — a dangling reference, or a value that is not a destination — yields no destination and no name written to the buffer, so it cannot be reported even as a `null` the way the other counted listings report theirs. Compare the length against `metadata.namedDestinationCount` to detect such damage. See [Unloadable entries](#unloadable-entries) for why this one is different.
 
 ```typescript
 interface NamedDestination {
@@ -515,12 +515,11 @@ interface NamedDestination {
 ```
 
 ```typescript
-// Every anchor the document declares, and whether any are out of reach.
+// Every anchor the document declares, and whether any are damaged.
 const doc = await loadDocument('document.pdf');
 const dests = await doc.getNamedDestinations();
 if (dests.length < doc.metadata.namedDestinationCount) {
-  // destinations exist that the index-based listing cannot enumerate;
-  // getNamedDestination(name) still resolves them
+  // some counted entries could not be resolved, so they are missing
 }
 ```
 
@@ -528,7 +527,7 @@ if (dests.length < doc.metadata.namedDestinationCount) {
 
 Resolves a single named destination by name. Returns `Promise<NamedDestination | null>` — `null` when the document carries no destination with that name, which is an answer rather than an error.
 
-Prefer this over scanning [`getNamedDestinations()`](#getnameddestinations) when a name is already in hand. It searches the `/Names /Dests` name tree and the legacy `/Dests` catalog dictionary alike and dereferences an indirect value in either, so it reaches destinations the listing cannot enumerate.
+Prefer this over scanning [`getNamedDestinations()`](#getnameddestinations) when a name is already in hand. It searches the `/Names /Dests` name tree and the legacy `/Dests` catalog dictionary alike and dereferences an indirect value in either.
 
 ```typescript
 // Resolve "document.pdf#Chapter2" to a page index without walking every link.

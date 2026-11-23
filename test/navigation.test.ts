@@ -181,35 +181,30 @@ describe('PDFiumDocument.getNamedDestination', () => {
   });
 });
 
-// Regression tests for the gap this listing cannot close by itself.
+// Regression tests for indirect legacy /Dests values.
 // indirect-legacy-dests.pdf carries one /Names /Dests entry and three legacy
 // catalog /Dests entries whose values are indirect references. Nothing about
 // it is malformed — ISO 32000-1 allows an indirect reference wherever a direct
-// object is allowed — but FPDF_GetNamedDest does not dereference on the legacy
-// path, so it returns neither a destination nor a name for those three. They
-// cannot even be reported as null entries, because the index carries no name
-// to report them under.
+// object is allowed. Before PDFium chromium/8100, FPDF_GetNamedDest did not
+// dereference on the legacy path and returned neither a destination nor a name
+// for those three, so the listing came back with only the name-tree entry.
+// Since then it lists all four, the same way the by-name lookup resolves them.
 describe('PDFiumDocument.getNamedDestinations with indirect legacy /Dests', () => {
-  it('comes back shorter than the count, which is what makes the gap visible', async () => {
+  it('lists every destination the count reports', async () => {
     const doc = await loadDocument(fixture('indirect-legacy-dests.pdf'));
     const dests = await doc.getNamedDestinations();
 
     expect(doc.metadata.namedDestinationCount).toBe(4);
-    expect(dests).toHaveLength(1);
-    // the one that lists is the name-tree entry; the tree path dereferences
-    expect(dests[0]!.name).toBe('Tree');
-
-    // without the count there is nothing to compare against, and a document
-    // with four anchors reads as one with a single anchor
-    expect(dests.length).toBeLessThan(doc.metadata.namedDestinationCount);
+    expect(dests).toHaveLength(doc.metadata.namedDestinationCount);
+    // name-tree entries come first, then the legacy keys in sorted order
+    expect(dests.map((d) => d.name)).toEqual(['Tree', 'Alpha', 'Beta', 'Gamma']);
 
     doc.destroy();
   });
 
-  it('resolves every unlistable destination by name', async () => {
+  it('resolves the legacy destinations by name too', async () => {
     const doc = await loadDocument(fixture('indirect-legacy-dests.pdf'));
 
-    // none of these appear in getNamedDestinations(), yet all three resolve
     const alpha = await doc.getNamedDestination('Alpha');
     expect(alpha!.pageIndex).toBe(0);
     expect(alpha!.view).toBe('xyz');
@@ -226,16 +221,14 @@ describe('PDFiumDocument.getNamedDestinations with indirect legacy /Dests', () =
     doc.destroy();
   });
 
-  it('reaches by name every name the listing omitted', async () => {
+  it('agrees with the by-name lookup for every listed entry', async () => {
     const doc = await loadDocument(fixture('indirect-legacy-dests.pdf'));
-    const listed = (await doc.getNamedDestinations()).map((d) => d.name);
+    const listed = await doc.getNamedDestinations();
 
-    const resolved = await Promise.all(
-      ['Tree', 'Alpha', 'Beta', 'Gamma'].map((n) => doc.getNamedDestination(n)),
-    );
-    // every anchor the document counts is reachable, listed or not
-    expect(resolved.filter((d) => d !== null)).toHaveLength(doc.metadata.namedDestinationCount);
-    expect(listed).toEqual(['Tree']);
+    // the index and name paths now dereference alike, so they must agree
+    for (const entry of listed) {
+      expect(await doc.getNamedDestination(entry.name)).toEqual(entry);
+    }
 
     doc.destroy();
   });
