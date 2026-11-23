@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { loadDocument, PDFiumDocument, PDFiumPage } from '../lib/index.js';
+import { loadDocument, PDFiumDocument, PDFiumPage, type FormPageObject } from '../lib/index.js';
 
 const fixture = (name: string) => resolve(import.meta.dirname!, 'fixtures', name);
 
@@ -281,6 +281,99 @@ describe('page close', () => {
     const page = await doc.getPage(0);
     page.close();
     expect(() => page.close()).not.toThrow();
+    doc.destroy();
+  });
+});
+
+describe('form XObjects', () => {
+  async function onlyForm(p: PDFiumPage): Promise<FormPageObject> {
+    const forms: FormPageObject[] = [];
+    for await (const o of p.objects()) if (o.type === 'form') forms.push(o);
+    expect(forms).toHaveLength(1);
+    return forms[0]!;
+  }
+
+  function nestedForm(form: FormPageObject): FormPageObject {
+    const inner = form.objects.filter((o) => o.type === 'form');
+    expect(inner).toHaveLength(1);
+    return inner[0] as FormPageObject;
+  }
+
+  it('lists the objects a form draws, nested forms included', async () => {
+    const doc = await loadDocument(fixture('form-xobjects.pdf'));
+    const p = await doc.getPage(0);
+    const inner = nestedForm(await onlyForm(p));
+
+    const text = inner.objects.find((o) => o.type === 'text');
+    expect(text?.type === 'text' && text.text).toBe('Total 12,50');
+    expect(text?.type === 'text' && text.renderMode).toBe('fill');
+    expect(inner.objects.some((o) => o.type === 'image')).toBe(true);
+
+    p.close();
+    doc.destroy();
+  });
+
+  it('maps nested bounds to page coordinates through every form matrix', async () => {
+    const doc = await loadDocument(fixture('form-xobjects.pdf'));
+    const p = await doc.getPage(0);
+    const inner = nestedForm(await onlyForm(p));
+
+    // 40x40 at (20, 20) on the inner page, halved and moved by (50, 50), then moved by (100, 20)
+    const image = inner.objects.find((o) => o.type === 'image');
+    expect(image?.bounds.left).toBeCloseTo(160, 1);
+    expect(image?.bounds.bottom).toBeCloseTo(80, 1);
+    expect(image?.bounds.right).toBeCloseTo(180, 1);
+    expect(image?.bounds.top).toBeCloseTo(100, 1);
+
+    // the text object's box holds the characters getCharacters() places for it
+    const text = inner.objects.find((o) => o.type === 'text');
+    const first = (await p.getCharacters()).find((c) => c.char === 'T');
+    expect(text && first?.bounds).toBeTruthy();
+    expect(first!.bounds!.left).toBeGreaterThanOrEqual(text!.bounds.left - 0.5);
+    expect(first!.bounds!.right).toBeLessThanOrEqual(text!.bounds.right + 0.5);
+    expect(first!.bounds!.bottom).toBeGreaterThanOrEqual(text!.bounds.bottom - 0.5);
+    expect(first!.bounds!.top).toBeLessThanOrEqual(text!.bounds.top + 0.5);
+
+    p.close();
+    doc.destroy();
+  });
+
+  it('gives an image inside a form no render function', async () => {
+    const doc = await loadDocument(fixture('form-xobjects.pdf'));
+    const p = await doc.getPage(0);
+    const image = nestedForm(await onlyForm(p)).objects.find((o) => o.type === 'image');
+
+    expect(image).toBeTruthy();
+    expect(image).not.toHaveProperty('render');
+
+    p.close();
+    doc.destroy();
+  });
+
+  it('stops at the depth cap and says so', async () => {
+    const doc = await loadDocument(fixture('form-depth-bomb.pdf'));
+    const p = await doc.getPage(0);
+    let form = await onlyForm(p);
+    let depth = 1;
+    while (!form.objectsTruncated) {
+      form = nestedForm(form);
+      depth++;
+    }
+
+    expect(depth).toBe(33);
+    expect(form.objects).toEqual([]);
+
+    p.close();
+    doc.destroy();
+  });
+
+  it('marks a complete listing with no truncation flag', async () => {
+    const doc = await loadDocument(fixture('form-xobjects.pdf'));
+    const p = await doc.getPage(0);
+
+    expect(await onlyForm(p)).not.toHaveProperty('objectsTruncated');
+
+    p.close();
     doc.destroy();
   });
 });

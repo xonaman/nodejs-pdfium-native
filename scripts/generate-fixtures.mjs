@@ -266,8 +266,8 @@ async function createTaggedPdf() {
 }
 
 // --- PDF with an embedded image ---
-async function createImagePdf() {
-  const doc = await PDFDocument.create();
+// a 2x2 PNG, red over blue, built by hand
+async function twoByTwoPng() {
   // create a minimal 2x2 red PNG manually (smallest valid PNG)
   const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
   // IHDR chunk: 2x2, 8-bit RGB
@@ -305,8 +305,12 @@ async function createImagePdf() {
   idat.writeUInt32BE(crc32(idat.subarray(4, 8 + compressed.length)) >>> 0, 8 + compressed.length);
   // IEND chunk
   const iend = Buffer.from([0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130]);
-  const pngData = Buffer.concat([signature, ihdr, idat, iend]);
+  return Buffer.concat([signature, ihdr, idat, iend]);
+}
 
+async function createImagePdf() {
+  const doc = await PDFDocument.create();
+  const pngData = await twoByTwoPng();
   const img = await doc.embedPng(pngData);
   const page = doc.addPage([612, 792]);
   page.drawImage(img, { x: 50, y: 600, width: 100, height: 100 });
@@ -1180,6 +1184,70 @@ async function createFormFieldsPdf() {
 }
 
 // Generate all fixtures
+// --- PDF whose text and image are drawn inside nested form XObjects ---
+// Some producers (an EDEKA e-receipt among them) draw a whole page inside one
+// form XObject. PDFium lists only the form on the page, so `objects` on the
+// form is the one way to its text objects and the images beside them. The
+// inner page is embedded twice over, scaled and moved each time, so the
+// fixture also pins the matrix math that maps nested bounds to the page.
+async function createFormXObjectsPdf() {
+  const inner = await PDFDocument.create();
+  const innerPage = inner.addPage([200, 200]);
+  const font = await inner.embedFont(StandardFonts.Helvetica);
+  innerPage.drawText('Total 12,50', { x: 20, y: 150, size: 20, font });
+  const image = await inner.embedPng(await twoByTwoPng());
+  innerPage.drawImage(image, { x: 20, y: 20, width: 40, height: 40 });
+
+  const middle = await PDFDocument.create();
+  const middlePage = middle.addPage([300, 300]);
+  middlePage.drawPage(
+    await middle.embedPage((await PDFDocument.load(await inner.save())).getPage(0)),
+    {
+      x: 50,
+      y: 50,
+      xScale: 0.5,
+      yScale: 0.5,
+    },
+  );
+
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([400, 400]);
+  page.drawPage(await doc.embedPage((await PDFDocument.load(await middle.save())).getPage(0)), {
+    x: 100,
+    y: 20,
+  });
+  return doc.save();
+}
+
+// --- PDF whose forms nest deeper than the walk follows ---
+// Forty form XObjects, each drawing the next, the last drawing a rectangle.
+async function createFormDepthBombPdf() {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([200, 200]);
+  const { PDFName } = await import('pdf-lib');
+  let ref = doc.context.register(
+    doc.context.stream('0 0 10 10 re f', {
+      Type: 'XObject',
+      Subtype: 'Form',
+      BBox: [0, 0, 200, 200],
+    }),
+  );
+  for (let i = 0; i < 40; i++) {
+    ref = doc.context.register(
+      doc.context.stream('/F Do', {
+        Type: 'XObject',
+        Subtype: 'Form',
+        BBox: [0, 0, 200, 200],
+        Resources: { XObject: { F: ref } },
+      }),
+    );
+  }
+  page.node.setXObject(PDFName.of('F'), ref);
+  const content = doc.context.register(doc.context.stream('/F Do'));
+  page.node.set(PDFName.of('Contents'), content);
+  return doc.save();
+}
+
 const fixtures = [
   ['metadata.pdf', createMetadataPdf],
   ['annotations.pdf', createAnnotationPdf],
@@ -1210,6 +1278,8 @@ const fixtures = [
   ['struct-tree.pdf', createStructTreePdf],
   ['astral-text.pdf', createAstralTextPdf],
   ['struct-tree-bomb.pdf', createStructTreeBombPdf],
+  ['form-xobjects.pdf', createFormXObjectsPdf],
+  ['form-depth-bomb.pdf', createFormDepthBombPdf],
 ];
 
 for (const [name, generator] of fixtures) {
