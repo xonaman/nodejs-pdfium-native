@@ -135,10 +135,38 @@ export interface ImagePageObject extends BasePageObject {
 }
 
 export interface OtherPageObject extends BasePageObject {
-  type: 'path' | 'shading' | 'form' | 'unknown';
+  type: 'path' | 'shading' | 'unknown';
 }
 
-export type PageObject = TextPageObject | ImagePageObject | OtherPageObject;
+/**
+ * A form XObject: a group of page objects drawn as one. PDFium lists the form
+ * on the page and its contents only through the form, so the objects it draws
+ * are in `objects` — a page's text drawn inside a form reaches `getText()` and
+ * `getCharacters()`, but its text objects, their render modes and any images
+ * beside them are visible here alone.
+ */
+export interface FormPageObject extends BasePageObject {
+  type: 'form';
+  /**
+   * The objects the form draws, in drawing order, nested forms with their own
+   * `objects`. Bounds are in page coordinates, with the form's matrix applied.
+   * An image inside a form has no `render`: `renderImage()` addresses only the
+   * objects placed on the page itself.
+   */
+  objects: NestedPageObject[];
+  /**
+   * Present and `true` when `objects` stops short of what the form draws: the
+   * walk ends at 32 levels of nested forms or 20,000 objects in one call, so a
+   * crafted file cannot make it allocate without limit.
+   */
+  objectsTruncated?: true;
+}
+
+/** A page object drawn inside a form XObject. */
+export type NestedPageObject =
+  TextPageObject | Omit<ImagePageObject, 'render'> | OtherPageObject | FormPageObject;
+
+export type PageObject = TextPageObject | ImagePageObject | OtherPageObject | FormPageObject;
 
 /**
  * A single character on a page, with the geometry `getText()` discards.

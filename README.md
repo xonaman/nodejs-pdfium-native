@@ -659,7 +659,7 @@ interface PageRenderOptions {
 Returns the page object at the given index. Returns `Promise<PageObject>`. Objects are discriminated by `type`:
 
 ```typescript
-type PageObject = TextPageObject | ImagePageObject | OtherPageObject;
+type PageObject = TextPageObject | ImagePageObject | OtherPageObject | FormPageObject;
 
 // all objects have:
 //   bounds: { left, bottom, right, top }
@@ -670,7 +670,18 @@ type PageObject = TextPageObject | ImagePageObject | OtherPageObject;
 //   renderMode?, fontFamily?, isEmbedded?, fontFlags?
 // type: 'image' adds: imageWidth, imageHeight, horizontalDpi?, verticalDpi?,
 //   bitsPerPixel?, colorspace?, filters?, render()
-// type: 'path' | 'shading' | 'form' | 'unknown'
+// type: 'form' adds: objects, objectsTruncated?
+// type: 'path' | 'shading' | 'unknown'
+```
+
+**Form objects** carry the objects the form XObject draws in `objects`, nested forms with their own `objects`, bounds in page coordinates. PDFium lists only the form on the page, so a page drawn entirely inside a form shows its text in `getText()` but its text objects, their render modes and the images beside them only here. An image inside a form has no `render()`. The walk stops at 32 levels of nesting or 20,000 objects per call and then sets `objectsTruncated: true`.
+
+```typescript
+const visit = (obj: PageObject | NestedPageObject): void => {
+  if (obj.type === 'form') obj.objects.forEach(visit);
+  else if (obj.type === 'text') console.log(obj.text, obj.renderMode);
+};
+for await (const obj of page.objects()) visit(obj);
 ```
 
 **Image objects** have a `render()` method for extracting the embedded image:
